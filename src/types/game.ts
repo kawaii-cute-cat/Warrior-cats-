@@ -1,4 +1,4 @@
-export type ClanId = 'ThunderOak' | 'RiverMist' | 'ShadowPines' | 'WindBreeze' | 'Loner';
+export type ClanId = 'ThunderClan' | 'RiverClan' | 'ShadowClan' | 'WindClan' | 'Loner' | 'ThunderOak' | 'RiverMist' | 'ShadowPines' | 'WindBreeze';
 
 export type ClanRole =
   | 'Kit'
@@ -12,16 +12,23 @@ export type ClanRole =
 
 export type RealmId = 'territory' | 'moonpool' | 'starclan' | 'darkforest';
 
-export type BodyType = 'kit' | 'apprentice' | 'adult' | 'large_warrior' | 'slim_hunter';
+export type BodyType = 'adult' | 'large_warrior' | 'slender_hunter' | 'apprentice' | 'kit' | 'slim_hunter';
 
 export type FurStyle =
+  | 'very_short'
+  | 'short'
+  | 'medium'
+  | 'long'
+  | 'fluffy'
+  | 'very_fluffy'
   | 'short_smooth'
   | 'medium_soft'
   | 'long_flowing'
-  | 'fluffy'
-  | 'thick_winter'
-  | 'tufted'
-  | 'curly_wavy';
+  | 'thick_winter';
+
+export type EarShape = 'normal' | 'small' | 'large' | 'rounded' | 'pointed' | 'tufted';
+
+export type MuzzleShape = 'short' | 'normal' | 'long';
 
 export type MarkingType =
   | 'solid'
@@ -31,9 +38,13 @@ export type MarkingType =
   | 'ticked'
   | 'colorpoint'
   | 'bicolor'
+  | 'van'
   | 'calico'
   | 'tortoiseshell'
   | 'patches'
+  | 'white_chest'
+  | 'white_paws'
+  | 'white_muzzle'
   | 'mask_and_boots';
 
 export type EyeState =
@@ -87,8 +98,10 @@ export interface CatAppearance {
   eyeColorRight: string;
   isHeterochromia: boolean;
   eyeState: EyeState;
-  muzzleLength: number; // 0.8 to 1.3
+  muzzleLength: number; // 0.7 (short) to 1.35 (long)
+  muzzleShape?: MuzzleShape;
   earSize: number; // 0.7 to 1.4
+  earShape?: EarShape;
   earTufts: boolean;
   tailLength: number; // 0.6 to 1.4
   tailThickness: number; // 0.6 to 1.5

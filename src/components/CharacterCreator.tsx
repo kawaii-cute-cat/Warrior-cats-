@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { AccessoryType, AuraType, BodyType, CatAppearance, ClanId, ClanRole, EyeState, FurStyle, MarkingType, PlayerCharacter, ScarType } from '../types/game';
+import { AccessoryType, AuraType, BodyType, CatAppearance, ClanId, ClanRole, EarShape, EyeState, FurStyle, MarkingType, MuzzleShape, PlayerCharacter, ScarType } from '../types/game';
 import { CAT_NAME_PREFIXES, CAT_NAME_SUFFIXES, CLAN_LORE, COLOR_PALETTE, DEFAULT_APPEARANCE } from '../constants/clans';
 import { CatMeshBuilder, CatRigNodes } from '../game/CatMeshBuilder';
 import { CatAnimationController } from '../game/CatAnimationController';
@@ -30,7 +30,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
   // Character State
   const [namePrefix, setNamePrefix] = useState('Bramble');
   const [nameSuffix, setNameSuffix] = useState('claw');
-  const [selectedClan, setSelectedClan] = useState<ClanId>('ThunderOak');
+  const [selectedClan, setSelectedClan] = useState<ClanId>('ThunderClan');
   const [selectedRole, setSelectedRole] = useState<ClanRole>('Warrior');
   const [appearance, setAppearance] = useState<CatAppearance>({ ...DEFAULT_APPEARANCE });
   const [activeTab, setActiveTab] = useState<'clan' | 'body' | 'fur' | 'colors' | 'face' | 'accessories' | 'auras'>('clan');
@@ -149,136 +149,140 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
 
     window.addEventListener('resize', handleResize);
 
+    // Drag to rotate controls
+    const onMouseDown = (e: MouseEvent) => {
+      previewRef.current.isDragging = true;
+      previewRef.current.prevX = e.clientX;
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!previewRef.current.isDragging || !previewRef.current.group) return;
+      const deltaX = e.clientX - previewRef.current.prevX;
+      previewRef.current.rotationY += deltaX * 0.01;
+      previewRef.current.group.rotation.y = previewRef.current.rotationY;
+      previewRef.current.prevX = e.clientX;
+    };
+    const onMouseUp = () => {
+      previewRef.current.isDragging = false;
+    };
+
+    container.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (previewRef.current.animId) cancelAnimationFrame(previewRef.current.animId);
+      container.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      if (previewRef.current.animId !== null) {
+        cancelAnimationFrame(previewRef.current.animId);
+      }
       renderer.dispose();
-      if (renderer.domElement.parentElement) {
-        renderer.domElement.parentElement.removeChild(renderer.domElement);
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
       }
     };
   }, []);
 
-  // Update Cat 3D Mesh when appearance state changes
+  // Rebuild 3D Cat Model on appearance change
   useEffect(() => {
     const p = previewRef.current;
-    if (!p.scene) return;
+    if (!p.scene || !p.renderer) return;
 
     if (p.group) {
       p.scene.remove(p.group);
+      p.group = null;
+      p.rig = null;
+      p.animator = null;
     }
 
     const { group, rig } = CatMeshBuilder.buildCat(appearance);
     group.rotation.y = p.rotationY;
     p.scene.add(group);
-
     p.group = group;
     p.rig = rig;
     p.animator = new CatAnimationController(rig);
     p.animator.setState('idle');
   }, [appearance]);
 
-  // Mouse drag turntable
-  const handleMouseDown = (e: React.MouseEvent) => {
-    previewRef.current.isDragging = true;
-    previewRef.current.prevX = e.clientX;
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const p = previewRef.current;
-    if (!p.isDragging || !p.group) return;
-    const dx = e.clientX - p.prevX;
-    p.prevX = e.clientX;
-    p.rotationY += dx * 0.01;
-    p.group.rotation.y = p.rotationY;
-  };
-
-  const handleMouseUp = () => {
-    previewRef.current.isDragging = false;
-  };
-
+  // Randomize generator
   const handleRandomize = () => {
-    const randomPrefix = CAT_NAME_PREFIXES[Math.floor(Math.random() * CAT_NAME_PREFIXES.length)];
-    const randomSuffix = CAT_NAME_SUFFIXES[Math.floor(Math.random() * CAT_NAME_SUFFIXES.length)];
-    setNamePrefix(randomPrefix);
-    setNameSuffix(randomSuffix);
+    soundEngine.playPurr();
+    const randomPre = CAT_NAME_PREFIXES[Math.floor(Math.random() * CAT_NAME_PREFIXES.length)];
+    const randomSuf = CAT_NAME_SUFFIXES[Math.floor(Math.random() * CAT_NAME_SUFFIXES.length)];
+    setNamePrefix(randomPre);
+    setNameSuffix(randomSuf);
 
-    const furColors = COLOR_PALETTE.fur;
-    const eyeColors = COLOR_PALETTE.eyes;
-    const markings: MarkingType[] = [
-      'solid', 'classic_tabby', 'mackerel_tabby', 'spotted', 'colorpoint', 'calico', 'tortoiseshell', 'bicolor'
-    ];
-    const bodyTypes: BodyType[] = ['kit', 'apprentice', 'adult', 'large_warrior', 'slim_hunter'];
-    const furStyles: FurStyle[] = ['short_smooth', 'medium_soft', 'long_flowing', 'fluffy', 'thick_winter'];
-    const accessories: AccessoryType[] = ['none', 'oak_leaves', 'blue_feather', 'violet_flower', 'poppy_flower', 'leather_collar'];
+    const furs = COLOR_PALETTE.fur;
+    const eyes = COLOR_PALETTE.eyes;
+    const fur1 = furs[Math.floor(Math.random() * furs.length)].hex;
+    const fur2 = furs[Math.floor(Math.random() * furs.length)].hex;
+    const eye1 = eyes[Math.floor(Math.random() * eyes.length)].hex;
+    const eye2 = eyes[Math.floor(Math.random() * eyes.length)].hex;
 
-    const prim = furColors[Math.floor(Math.random() * furColors.length)].hex;
-    const sec = furColors[Math.floor(Math.random() * furColors.length)].hex;
-    const eye = eyeColors[Math.floor(Math.random() * eyeColors.length)].hex;
+    const markings: MarkingType[] = ['solid', 'classic_tabby', 'mackerel_tabby', 'spotted', 'colorpoint', 'calico', 'tortoiseshell', 'bicolor', 'white_chest'];
+    const furStyles: FurStyle[] = ['short_smooth', 'medium', 'fluffy', 'very_fluffy'];
+    const earShapes: EarShape[] = ['normal', 'pointed', 'rounded', 'tufted'];
+    const muzzleShapes: MuzzleShape[] = ['normal', 'short', 'long'];
+    const bodyTypes: BodyType[] = ['adult', 'slender_hunter', 'large_warrior'];
 
     setAppearance({
-      bodyType: bodyTypes[Math.floor(Math.random() * bodyTypes.length)],
-      furStyle: furStyles[Math.floor(Math.random() * furStyles.length)],
-      primaryColor: prim,
-      secondaryColor: sec,
-      underbellyColor: '#fffbeb',
+      ...appearance,
+      primaryColor: fur1,
+      secondaryColor: fur2,
+      underbellyColor: Math.random() > 0.4 ? '#fffbeb' : fur1,
       markingType: markings[Math.floor(Math.random() * markings.length)],
-      eyeColorLeft: eye,
-      eyeColorRight: eye,
-      isHeterochromia: Math.random() < 0.15,
-      eyeState: Math.random() < 0.1 ? 'star_shine' : 'normal',
-      muzzleLength: 0.9 + Math.random() * 0.3,
-      earSize: 0.9 + Math.random() * 0.3,
-      earTufts: Math.random() < 0.3,
+      furStyle: furStyles[Math.floor(Math.random() * furStyles.length)],
+      earShape: earShapes[Math.floor(Math.random() * earShapes.length)],
+      muzzleShape: muzzleShapes[Math.floor(Math.random() * muzzleShapes.length)],
+      bodyType: bodyTypes[Math.floor(Math.random() * bodyTypes.length)],
+      eyeColorLeft: eye1,
+      eyeColorRight: Math.random() > 0.85 ? eye2 : eye1,
+      isHeterochromia: Math.random() > 0.85,
       tailLength: 0.8 + Math.random() * 0.4,
-      tailThickness: 0.8 + Math.random() * 0.4,
-      legLength: 0.9 + Math.random() * 0.2,
-      pawSize: 0.9 + Math.random() * 0.3,
-      bodyScale: 1.0,
-      accessory: accessories[Math.floor(Math.random() * accessories.length)],
-      scar: 'none',
-      aura: 'none',
+      tailThickness: 0.85 + Math.random() * 0.35,
+      earSize: 0.85 + Math.random() * 0.3,
+      muzzleLength: 0.85 + Math.random() * 0.3,
+      legLength: 0.9 + Math.random() * 0.25,
+      pawSize: 0.9 + Math.random() * 0.25,
+      earTufts: Math.random() > 0.6,
     });
-
-    soundEngine.playMeow();
   };
 
   const handleStartGame = () => {
-    soundEngine.playPurr();
-    const fullName = `${namePrefix}${nameSuffix.toLowerCase()}`;
-    const newChar: PlayerCharacter = {
-      id: `player_${Date.now()}`,
-      name: fullName,
+    soundEngine.playStarClanChime();
+    const character: PlayerCharacter = {
+      id: `cat_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name: `${namePrefix}${nameSuffix.toLowerCase()}`,
       prefix: namePrefix,
-      suffix: nameSuffix,
+      suffix: nameSuffix.toLowerCase(),
       clan: selectedClan,
       role: selectedRole,
       appearance,
-      reputation: 50,
-      leaderLives: selectedRole === 'Leader' ? 9 : 1,
-      maxLeaderLives: selectedRole === 'Leader' ? 9 : 1,
+      leaderLives: selectedRole === 'Leader' ? 9 : 0,
+      maxLeaderLives: selectedRole === 'Leader' ? 9 : 0,
+      reputation: 100,
       deathHistory: [],
       createdAt: new Date().toISOString(),
       lastPlayed: new Date().toISOString(),
     };
-
-    onComplete(newChar);
+    onComplete(character);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col lg:flex-row bg-stone-950 text-stone-100 font-sans select-none overflow-hidden">
-      {/* LEFT: 3D INTERACTIVE PREVIEW */}
-      <div 
-        className="relative flex-1 h-[45vh] lg:h-full flex flex-col bg-gradient-to-b from-stone-900 to-stone-950 border-b lg:border-b-0 lg:border-r border-stone-800"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-      >
-        {/* Top Floating Badge */}
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-stone-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-stone-700/60 shadow-lg">
-          <span className="text-lg">{CLAN_LORE[selectedClan].badgeIcon}</span>
+    <div className="relative w-full h-full flex flex-col lg:flex-row bg-stone-950 text-stone-100 select-none overflow-hidden">
+      {/* LEFT: 3D HERO PREVIEW STAGE */}
+      <div className="relative flex-1 h-[45vh] lg:h-full bg-gradient-to-b from-stone-900 via-stone-950 to-stone-950 flex flex-col items-center justify-center overflow-hidden border-b lg:border-b-0 lg:border-r border-stone-800">
+        {/* Clan Tag & Name Header */}
+        <div className="absolute top-4 left-4 z-10 flex flex-col">
+          <span className="text-[10px] font-black tracking-widest uppercase text-amber-400/80">
+            {CLAN_LORE[selectedClan]?.name || selectedClan}
+          </span>
+          <span className="text-xl font-black text-stone-100 tracking-wider">
+            {namePrefix}{nameSuffix.toLowerCase()}
+          </span>
           <span className="text-xs font-bold text-amber-300">
-            {namePrefix}{nameSuffix.toLowerCase()} • {selectedRole}
+            {selectedRole}
           </span>
         </div>
 
@@ -347,8 +351,8 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
           {[
             { id: 'clan', label: 'Clan & Role', icon: <Shield className="w-3.5 h-3.5" /> },
             { id: 'body', label: 'Body', icon: <Layers className="w-3.5 h-3.5" /> },
-            { id: 'fur', label: 'Fur & Markings', icon: <Palette className="w-3.5 h-3.5" /> },
-            { id: 'face', label: 'Eyes & Face', icon: <Eye className="w-3.5 h-3.5" /> },
+            { id: 'fur', label: 'Fur & Coat', icon: <Palette className="w-3.5 h-3.5" /> },
+            { id: 'face', label: 'Face & Ears', icon: <Eye className="w-3.5 h-3.5" /> },
             { id: 'accessories', label: 'Decorations', icon: <Feather className="w-3.5 h-3.5" /> },
             { id: 'auras', label: 'Celestial Auras', icon: <Sparkles className="w-3.5 h-3.5" /> },
           ].map((tab) => (
@@ -434,14 +438,14 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
           {activeTab === 'body' && (
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Body Build & Age</label>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Body Build Archetype</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'kit', name: 'Kit' },
+                    { id: 'kit', name: 'Kit (Small)' },
                     { id: 'apprentice', name: 'Apprentice' },
-                    { id: 'adult', name: 'Adult' },
-                    { id: 'large_warrior', name: 'Large Warrior' },
-                    { id: 'slim_hunter', name: 'Slim Hunter' },
+                    { id: 'adult', name: 'Adult Warrior' },
+                    { id: 'large_warrior', name: 'Large Warrior (Tall & Muscular)' },
+                    { id: 'slender_hunter', name: 'Slender Hunter (Agile)' },
                   ].map((b) => (
                     <button
                       key={b.id}
@@ -460,30 +464,30 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
 
               <div>
                 <label className="text-xs font-bold text-stone-300 block mb-1">
-                  Muzzle Length ({appearance.muzzleLength.toFixed(2)}x)
+                  Leg Length ({appearance.legLength ? appearance.legLength.toFixed(2) : '1.00'}x)
                 </label>
                 <input
                   type="range"
                   min="0.8"
                   max="1.3"
                   step="0.05"
-                  value={appearance.muzzleLength}
-                  onChange={(e) => setAppearance({ ...appearance, muzzleLength: parseFloat(e.target.value) })}
+                  value={appearance.legLength || 1.0}
+                  onChange={(e) => setAppearance({ ...appearance, legLength: parseFloat(e.target.value) })}
                   className="w-full accent-amber-400"
                 />
               </div>
 
               <div>
                 <label className="text-xs font-bold text-stone-300 block mb-1">
-                  Ear Size ({appearance.earSize.toFixed(2)}x)
+                  Paw Scale ({appearance.pawSize ? appearance.pawSize.toFixed(2) : '1.00'}x)
                 </label>
                 <input
                   type="range"
-                  min="0.7"
-                  max="1.4"
+                  min="0.8"
+                  max="1.3"
                   step="0.05"
-                  value={appearance.earSize}
-                  onChange={(e) => setAppearance({ ...appearance, earSize: parseFloat(e.target.value) })}
+                  value={appearance.pawSize || 1.0}
+                  onChange={(e) => setAppearance({ ...appearance, pawSize: parseFloat(e.target.value) })}
                   className="w-full accent-amber-400"
                 />
               </div>
@@ -502,24 +506,65 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
                   className="w-full accent-amber-400"
                 />
               </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-300 block mb-1">
+                  Tail Thickness ({appearance.tailThickness ? appearance.tailThickness.toFixed(2) : '1.00'}x)
+                </label>
+                <input
+                  type="range"
+                  min="0.7"
+                  max="1.5"
+                  step="0.05"
+                  value={appearance.tailThickness || 1.0}
+                  onChange={(e) => setAppearance({ ...appearance, tailThickness: parseFloat(e.target.value) })}
+                  className="w-full accent-amber-400"
+                />
+              </div>
             </div>
           )}
 
-          {/* TAB 3: FUR & MARKINGS */}
+          {/* TAB 3: FUR & COAT */}
           {activeTab === 'fur' && (
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Fur Pattern / Markings</label>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Fur Silhouette Style</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'short_smooth', name: 'Sleek & Smooth' },
+                    { id: 'medium', name: 'Medium Wildcat' },
+                    { id: 'fluffy', name: 'Fluffy Neck Ruff' },
+                    { id: 'very_fluffy', name: 'Lion Mane & Plume Tail' },
+                  ].map((fs) => (
+                    <button
+                      key={fs.id}
+                      onClick={() => setAppearance({ ...appearance, furStyle: fs.id as any })}
+                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
+                        appearance.furStyle === fs.id
+                          ? 'bg-amber-950/60 border-amber-400 text-amber-200'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-300 hover:border-stone-700'
+                      }`}
+                    >
+                      {fs.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Coat Markings Pattern</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { id: 'solid', name: 'Solid Pure' },
                     { id: 'classic_tabby', name: 'Classic Tabby Swirls' },
                     { id: 'mackerel_tabby', name: 'Mackerel Tiger Stripes' },
                     { id: 'spotted', name: 'Spotted Leopard' },
+                    { id: 'ticked', name: 'Agouti Ticked' },
                     { id: 'colorpoint', name: 'Colorpoint Mask & Paws' },
                     { id: 'calico', name: 'Tri-Color Calico' },
                     { id: 'tortoiseshell', name: 'Tortoiseshell Mottled' },
                     { id: 'bicolor', name: 'Bicolor Tuxedo / Blaze' },
+                    { id: 'white_chest', name: 'White Star Chest' },
                   ].map((m) => (
                     <button
                       key={m.id}
@@ -572,9 +617,56 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
             </div>
           )}
 
-          {/* TAB 4: EYES & FACE */}
+          {/* TAB 4: FACE, EARS & EYES */}
           {activeTab === 'face' && (
             <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Muzzle Shape Profile</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'short', name: 'Snub / Compact' },
+                    { id: 'normal', name: 'Normal Feline' },
+                    { id: 'long', name: 'Elongated Wildcat' },
+                  ].map((ms) => (
+                    <button
+                      key={ms.id}
+                      onClick={() => setAppearance({ ...appearance, muzzleShape: ms.id as any, muzzleLength: ms.id === 'short' ? 0.78 : (ms.id === 'long' ? 1.25 : 1.0) })}
+                      className={`p-2 rounded-xl border text-xs font-bold text-center transition ${
+                        appearance.muzzleShape === ms.id
+                          ? 'bg-amber-950/60 border-amber-400 text-amber-200'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-300'
+                      }`}
+                    >
+                      {ms.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Ear Shape</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'normal', name: 'Standard Triangular' },
+                    { id: 'pointed', name: 'Tall Pointed Oriental' },
+                    { id: 'rounded', name: 'Curved Rounded' },
+                    { id: 'tufted', name: 'Lynx Ear Tufts' },
+                  ].map((es) => (
+                    <button
+                      key={es.id}
+                      onClick={() => setAppearance({ ...appearance, earShape: es.id as any, earTufts: es.id === 'tufted' ? true : appearance.earTufts })}
+                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
+                        appearance.earShape === es.id
+                          ? 'bg-amber-950/60 border-amber-400 text-amber-200'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-300'
+                      }`}
+                    >
+                      {es.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-stone-300 block mb-2">Eye Color Palette</label>
                 <div className="flex flex-wrap gap-2">
@@ -599,14 +691,14 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
               </div>
 
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Special Eye State / Vision</label>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Eye Vision & Blindness State</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { id: 'normal', name: 'Keen Sight (Normal)' },
-                    { id: 'blind_left', name: 'Blind Left Eye' },
-                    { id: 'blind_right', name: 'Blind Right Eye' },
-                    { id: 'blind_both', name: 'Blind in Both Eyes' },
-                    { id: 'star_shine', name: 'StarClan Shimmer' },
+                    { id: 'blind_left', name: 'Blind Left Eye (Milky Cataract)' },
+                    { id: 'blind_right', name: 'Blind Right Eye (Milky Cataract)' },
+                    { id: 'blind_both', name: 'Blind in Both Eyes (Jayfeather)' },
+                    { id: 'star_shine', name: 'StarClan Shimmer Glow' },
                     { id: 'amber_glow', name: 'Predator Amber Glow' },
                   ].map((es) => (
                     <button
@@ -641,6 +733,8 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
                     { id: 'poppy_flower', name: 'Red Poppy Bloom' },
                     { id: 'leather_collar', name: 'Former Kittypet Collar' },
                     { id: 'bell_collar', name: 'Golden Bell Collar' },
+                    { id: 'moss_shoulder_wrap', name: 'Moss Shoulder Wrap' },
+                    { id: 'holly_berries', name: 'Holly Berries' },
                   ].map((acc) => (
                     <button
                       key={acc.id}
@@ -665,6 +759,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
                     { id: 'torn_left_ear', name: 'Torn Left Ear' },
                     { id: 'torn_right_ear', name: 'Torn Right Ear' },
                     { id: 'muzzle_scratch', name: 'Muzzle Claw Scratch' },
+                    { id: 'shoulder_claw_marks', name: 'Shoulder Claw Marks' },
                   ].map((sc) => (
                     <button
                       key={sc.id}
