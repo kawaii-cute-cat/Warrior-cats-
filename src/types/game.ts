@@ -1,0 +1,265 @@
+export type ClanId = 'ThunderOak' | 'RiverMist' | 'ShadowPines' | 'WindBreeze' | 'Loner';
+
+export type ClanRole =
+  | 'Kit'
+  | 'Apprentice'
+  | 'Warrior'
+  | 'Medicine Cat Apprentice'
+  | 'Medicine Cat'
+  | 'Deputy'
+  | 'Leader'
+  | 'Elder';
+
+export type RealmId = 'territory' | 'moonpool' | 'starclan' | 'darkforest';
+
+export type BodyType = 'kit' | 'apprentice' | 'adult' | 'large_warrior' | 'slim_hunter';
+
+export type FurStyle =
+  | 'short_smooth'
+  | 'medium_soft'
+  | 'long_flowing'
+  | 'fluffy'
+  | 'thick_winter'
+  | 'tufted'
+  | 'curly_wavy';
+
+export type MarkingType =
+  | 'solid'
+  | 'classic_tabby'
+  | 'mackerel_tabby'
+  | 'spotted'
+  | 'ticked'
+  | 'colorpoint'
+  | 'bicolor'
+  | 'calico'
+  | 'tortoiseshell'
+  | 'patches'
+  | 'mask_and_boots';
+
+export type EyeState =
+  | 'normal'
+  | 'blind_left'
+  | 'blind_right'
+  | 'blind_both'
+  | 'star_shine'
+  | 'amber_glow';
+
+export type AccessoryType =
+  | 'none'
+  | 'oak_leaves'
+  | 'blue_feather'
+  | 'cardinal_feather'
+  | 'violet_flower'
+  | 'poppy_flower'
+  | 'moss_shoulder_wrap'
+  | 'twig_charm'
+  | 'leather_collar'
+  | 'bell_collar'
+  | 'holly_berries';
+
+export type ScarType =
+  | 'none'
+  | 'torn_left_ear'
+  | 'torn_right_ear'
+  | 'muzzle_scratch'
+  | 'shoulder_claw_marks'
+  | 'blind_eye_slash'
+  | 'tail_nick'
+  | 'cross_scars';
+
+export type AuraType =
+  | 'none'
+  | 'starclan_stars'
+  | 'darkforest_smoke'
+  | 'celestial_shimmer'
+  | 'firefly_glow'
+  | 'autumn_leaves'
+  | 'frost_mist';
+
+export interface CatAppearance {
+  bodyType: BodyType;
+  furStyle: FurStyle;
+  primaryColor: string;
+  secondaryColor: string;
+  underbellyColor: string;
+  markingType: MarkingType;
+  eyeColorLeft: string;
+  eyeColorRight: string;
+  isHeterochromia: boolean;
+  eyeState: EyeState;
+  muzzleLength: number; // 0.8 to 1.3
+  earSize: number; // 0.7 to 1.4
+  earTufts: boolean;
+  tailLength: number; // 0.6 to 1.4
+  tailThickness: number; // 0.6 to 1.5
+  legLength: number; // 0.8 to 1.2
+  pawSize: number; // 0.8 to 1.3
+  bodyScale: number; // overall scale factor
+  accessory: AccessoryType;
+  scar: ScarType;
+  aura: AuraType;
+}
+
+export type AnimationState =
+  | 'idle'
+  | 'walk'
+  | 'trot'
+  | 'run'
+  | 'sprint'
+  | 'jump'
+  | 'fall'
+  | 'land'
+  | 'sneak'
+  | 'pounce_windup'
+  | 'pounce_leap'
+  | 'claw_swipe'
+  | 'bite'
+  | 'block'
+  | 'hurt'
+  | 'die'
+  | 'sit'
+  | 'lay_down'
+  | 'sleep'
+  | 'groom'
+  | 'hiss'
+  | 'snarl'
+  | 'bow'
+  | 'swim';
+
+export interface Injury {
+  id: string;
+  name: string;
+  type: 'scratch' | 'bleeding' | 'sprain' | 'bite_wound' | 'infected';
+  severity: 1 | 2 | 3;
+  curedByHerb: HerbType;
+  description: string;
+  timeRemaining: number;
+}
+
+export type HerbType = 'marigold' | 'dock' | 'poppy_seed' | 'horsetail' | 'catmint';
+
+export interface HerbItem {
+  id: string;
+  type: HerbType;
+  name: string;
+  description: string;
+  cures: string;
+  quantity: number;
+}
+
+export interface PreyItem {
+  id: string;
+  type: 'mouse' | 'rabbit' | 'bird' | 'fish' | 'vole' | 'squirrel';
+  name: string;
+  nutrition: number;
+  weightKg: number;
+  freshness: number; // 100% -> decays over time
+}
+
+export interface PreyEntity {
+  id: string;
+  type: 'mouse' | 'rabbit' | 'bird' | 'fish' | 'vole' | 'squirrel';
+  position: { x: number; y: number; z: number };
+  rotation: number;
+  state: 'idle' | 'wander' | 'alert' | 'flee' | 'caught';
+  speed: number;
+  alertLevel: number; // 0 to 100
+  targetPos?: { x: number; y: number; z: number };
+  fleeTimer?: number;
+}
+
+export interface DeathRecord {
+  lifeNumber: number;
+  timestamp: string;
+  cause: string;
+  location: string;
+}
+
+export interface PlayerCharacter {
+  id: string;
+  name: string;
+  prefix: string;
+  suffix: string;
+  clan: ClanId;
+  role: ClanRole;
+  appearance: CatAppearance;
+  reputation: number;
+  leaderLives: number; // 0 to 9
+  maxLeaderLives: number;
+  deathHistory: DeathRecord[];
+  createdAt: string;
+  lastPlayed: string;
+}
+
+export interface PlayerRuntimeState {
+  id: string;
+  character: PlayerCharacter;
+  position: { x: number; y: number; z: number };
+  rotation: { yaw: number; pitch: number };
+  velocity: { x: number; y: number; z: number };
+  animation: AnimationState;
+  health: number;
+  maxHealth: number;
+  stamina: number;
+  maxStamina: number;
+  carriedPrey: PreyItem | null;
+  herbs: HerbItem[];
+  injuries: Injury[];
+  currentRealm: RealmId;
+  isSneaking: boolean;
+  isResting: boolean;
+  isScentSenseActive: boolean;
+  isDead: boolean;
+  activeTargetId?: string | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderClan: ClanId;
+  senderRole: ClanRole;
+  text: string;
+  channel: 'local' | 'clan' | 'whisper' | 'rp' | 'system';
+  timestamp: number;
+  recipientId?: string;
+}
+
+export interface Prophecy {
+  id: string;
+  title: string;
+  verses: string[];
+  ancestorGiver: string;
+  receivedAt: string;
+  meaning: string;
+}
+
+export interface ClanDetails {
+  id: ClanId;
+  name: string;
+  motto: string;
+  description: string;
+  territoryName: string;
+  leaderName: string;
+  deputyName: string;
+  medCatName: string;
+  primaryColor: string;
+  badgeIcon: string;
+  freshKillCount: number;
+}
+
+export interface GameSettings {
+  graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
+  shadows: boolean;
+  particles: boolean;
+  fov: number;
+  cameraDistance: number;
+  mouseSensitivity: number;
+  masterVolume: number;
+  sfxVolume: number;
+  musicVolume: number;
+  showChatBubbles: boolean;
+  showPlayerNametags: boolean;
+  scentVisionHighlights: boolean;
+  reducedMotion: boolean;
+}

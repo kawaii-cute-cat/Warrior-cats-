@@ -1,0 +1,221 @@
+import { ClanDetails, ClanId, CatAppearance, HerbItem, Prophecy } from '../types/game';
+
+export const CLAN_LORE: Record<ClanId, ClanDetails> = {
+  ThunderOak: {
+    id: 'ThunderOak',
+    name: 'ThunderOak Clan',
+    motto: 'Courage beneath the canopy, fierce as the storm.',
+    description: 'Masters of dense deciduous woodlands and thick undergrowth. Known for their bravery, muscular stalks, and unwavering loyalty.',
+    territoryName: 'The Sunlit Oakwoods & Ravine Camp',
+    leaderName: 'BrambleStar',
+    deputyName: 'RowanClaw',
+    medCatName: 'FernWhisper',
+    primaryColor: '#e07a22',
+    badgeIcon: '⚡',
+    freshKillCount: 24,
+  },
+  RiverMist: {
+    id: 'RiverMist',
+    name: 'RiverMist Clan',
+    motto: 'Swift as the rapids, graceful beneath the waves.',
+    description: 'Sleek, water-loving cats who live alongside the winding riverbanks and reed beds. Renowned for their swimming prowess and silver coats.',
+    territoryName: 'The Glimmering Reeds & Island Hollow',
+    leaderName: 'RippleStar',
+    deputyName: 'OtterSplash',
+    medCatName: 'WillowShine',
+    primaryColor: '#3b82f6',
+    badgeIcon: '🌊',
+    freshKillCount: 19,
+  },
+  ShadowPines: {
+    id: 'ShadowPines',
+    name: 'ShadowPines Clan',
+    motto: 'Silent as the pine needles, striking in the dark.',
+    description: 'Stealthy, cunning felines who hunt amidst dark conifer groves, marshy pools, and moonlit bogs. Feared for night ambushes and unmatched silence.',
+    territoryName: 'The Pine Shadows & Bog Hollow',
+    leaderName: 'NightStar',
+    deputyName: 'ViperStrike',
+    medCatName: 'SagePool',
+    primaryColor: '#8b5cf6',
+    badgeIcon: '🌙',
+    freshKillCount: 16,
+  },
+  WindBreeze: {
+    id: 'WindBreeze',
+    name: 'WindBreeze Clan',
+    motto: 'Fast as the gale, free beneath the open sky.',
+    description: 'Slender, long-legged runners who roam the open heather moorlands and rolling hills. Quickest hunters of swift rabbits.',
+    territoryName: 'The Whispering Moor & Gorge Camp',
+    leaderName: 'GaleStar',
+    deputyName: 'FalconPounce',
+    medCatName: 'HeatherBreeze',
+    primaryColor: '#10b981',
+    badgeIcon: '🍃',
+    freshKillCount: 21,
+  },
+  Loner: {
+    id: 'Loner',
+    name: 'Loner & Rogue',
+    motto: 'Bound to no clan law, master of my own paws.',
+    description: 'Independent cats who roam outside Clan boundaries, finding shelter in abandoned two-leg nests, rocky cliffs, and forgotten hollows.',
+    territoryName: 'Neutral Borderlands & Two-leg Ruins',
+    leaderName: 'None',
+    deputyName: 'None',
+    medCatName: 'None',
+    primaryColor: '#94a3b8',
+    badgeIcon: '🐾',
+    freshKillCount: 8,
+  },
+};
+
+export const DEFAULT_APPEARANCE: CatAppearance = {
+  bodyType: 'adult',
+  furStyle: 'medium_soft',
+  primaryColor: '#c8763e', // ginger / golden brown
+  secondaryColor: '#fde68a', // creamy underbelly
+  underbellyColor: '#fffbeb',
+  markingType: 'mackerel_tabby',
+  eyeColorLeft: '#10b981', // emerald green
+  eyeColorRight: '#10b981',
+  isHeterochromia: false,
+  eyeState: 'normal',
+  muzzleLength: 1.0,
+  earSize: 1.0,
+  earTufts: false,
+  tailLength: 1.0,
+  tailThickness: 1.0,
+  legLength: 1.0,
+  pawSize: 1.0,
+  bodyScale: 1.0,
+  accessory: 'none',
+  scar: 'none',
+  aura: 'none',
+};
+
+export const COLOR_PALETTE = {
+  fur: [
+    { name: 'Pitch Black', hex: '#1c1917' },
+    { name: 'Smoky Charcoal', hex: '#334155' },
+    { name: 'Silver Gray', hex: '#94a3b8' },
+    { name: 'Blue-Gray', hex: '#64748b' },
+    { name: 'Pure Snow', hex: '#f8fafc' },
+    { name: 'Warm Cream', hex: '#fef3c7' },
+    { name: 'Sandy Beige', hex: '#d97706' },
+    { name: 'Golden Ginger', hex: '#ea580c' },
+    { name: 'Flame Red', hex: '#dc2626' },
+    { name: 'Tawny Amber', hex: '#b45309' },
+    { name: 'Rich Chestnut', hex: '#78350f' },
+    { name: 'Dark Chocolate', hex: '#451a03' },
+    { name: 'Russet Cinnamon', hex: '#9a3412' },
+  ],
+  eyes: [
+    { name: 'Forest Emerald', hex: '#10b981' },
+    { name: 'Mint Jade', hex: '#34d399' },
+    { name: 'Sapphire Blue', hex: '#3b82f6' },
+    { name: 'Sky Cyan', hex: '#38bdf8' },
+    { name: 'Sun Amber', hex: '#f59e0b' },
+    { name: 'Golden Honey', hex: '#eab308' },
+    { name: 'Copper Flame', hex: '#f97316' },
+    { name: 'Deep Violet', hex: '#a855f7' },
+    { name: 'Pale Hazel', hex: '#84cc16' },
+    { name: 'Smoky Slate', hex: '#64748b' },
+  ],
+};
+
+export const CAT_NAME_PREFIXES = [
+  'Bramble', 'Oak', 'Shadow', 'River', 'Storm', 'Golden', 'Silver', 'Flame', 'Frost',
+  'Night', 'Rowan', 'Fern', 'Alder', 'Hawk', 'Falcon', 'Raven', 'Eagle', 'Thistle',
+  'Moss', 'Clover', 'Willow', 'Birch', 'Ash', 'Cedar', 'Pebble', 'Swift', 'Leopard',
+  'Lion', 'Tiger', 'Cloud', 'Mist', 'Dawn', 'Dusk', 'Ember', 'Fox', 'Badger', 'Wolf',
+];
+
+export const CAT_NAME_SUFFIXES = [
+  'claw', 'fur', 'pelt', 'tail', 'heart', 'storm', 'stride', 'whisper', 'watcher',
+  'fall', 'flight', 'shine', 'song', 'pool', 'leap', 'pounce', 'breeze', 'feather',
+  'wing', 'frost', 'shade', 'fang', 'gaze', 'step', 'branch', 'blaze', 'stream',
+];
+
+export const INITIAL_HERBS: HerbItem[] = [
+  {
+    id: 'marigold-1',
+    type: 'marigold',
+    name: 'Marigold Blossom',
+    description: 'Bright golden petals that stop infection and disinfect bleeding claw wounds.',
+    cures: 'Cures Infection & Bleeding',
+    quantity: 2,
+  },
+  {
+    id: 'dock-1',
+    type: 'dock',
+    name: 'Dock Leaf',
+    description: 'Broad soothing leaves chewed to soothe stinging nettles and abrasive scratches.',
+    cures: 'Soothes Scratches & Stings',
+    quantity: 3,
+  },
+  {
+    id: 'poppy-1',
+    type: 'poppy_seed',
+    name: 'Poppy Seeds',
+    description: 'Small dark seeds that induce soothing sleep and ease intense physical pain.',
+    cures: 'Relieves Severe Pain & Restores Stamina',
+    quantity: 4,
+  },
+  {
+    id: 'horsetail-1',
+    type: 'horsetail',
+    name: 'Horsetail Reed',
+    description: 'Tall fibrous stalks crushed into a poultice to bind sprained paws and broken joints.',
+    cures: 'Mends Sprains & Limping',
+    quantity: 2,
+  },
+  {
+    id: 'catmint-1',
+    type: 'catmint',
+    name: 'Wild Catmint',
+    description: 'Fragrant rare leafy herb that instantly revitalizes weary spirits and cures greencough.',
+    cures: 'Restores Max Health & Vitality',
+    quantity: 1,
+  },
+];
+
+export const PROCEDURAL_PROPHECIES: Prophecy[] = [
+  {
+    id: 'prophecy-1',
+    title: 'The Shadows in the Brambles',
+    verses: [
+      'When the river runs silver beneath the crescent moon,',
+      'The thorn will strike before the blossom can bloom.',
+      'Only the heart born of storm and fire',
+      'Can guide the four clans from the encroaching mire.',
+    ],
+    ancestorGiver: 'SilverStar of Ancient StarClan',
+    receivedAt: 'The Sacred Moonpool Sanctuary',
+    meaning: 'A dark conflict threatens the borderlands; courage and unity must triumph over ancient blood-feuds.',
+  },
+  {
+    id: 'prophecy-2',
+    title: 'The Whisper of Nine Sparks',
+    verses: [
+      'Nine lives pledged to the sacred oak,',
+      'Nine spirits answer when the thunder spoke.',
+      'Beware the shadow that trains in sleep,',
+      'For promises made in darkness are bitter to keep.',
+    ],
+    ancestorGiver: 'GoldenFeather, Founder of ThunderOak',
+    receivedAt: 'The Silverpelt Gathering Ground',
+    meaning: 'The Dark Forest is reaching into the dreams of ambitious warriors; leaders must watch their apprentices closely.',
+  },
+  {
+    id: 'prophecy-3',
+    title: 'The Clear Stream Awakening',
+    verses: [
+      'Water shall quench what fire ignited,',
+      'When long-divided kin are once more reunited.',
+      'Seek the herb on the highest stone crest,',
+      'To put the weeping sickness to final rest.',
+    ],
+    ancestorGiver: 'RipplePool, Ancient Medicine Healer',
+    receivedAt: 'The Moonpool Reflections',
+    meaning: 'Medicine cats are guided towards the rare high-peak Catmint to heal deep clan wounds.',
+  },
+];

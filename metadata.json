@@ -1,0 +1,6 @@
+{
+  "name": "Wildclans 3D: Echoes of the Stars",
+  "description": "A fully 3D multiplayer cat roleplaying game featuring clan territories, real-time hunting & combat, sacred Moonpool prophecies, StarClan and Dark Forest realms, leader nine-lives, dynamic prey AI, and deep feline customization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

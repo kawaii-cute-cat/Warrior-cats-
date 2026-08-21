@@ -1,0 +1,639 @@
+import * as THREE from 'three';
+import { AnimationState, CatAppearance, HerbType, PlayerCharacter, PlayerRuntimeState, PreyItem, RealmId } from '../types/game';
+import { CatMeshBuilder, CatRigNodes } from './CatMeshBuilder';
+import { CatAnimationController } from './CatAnimationController';
+import { WorldBuilder, WorldObjects } from './WorldBuilder';
+import { PreyEntityManager } from './PreyEntityManager';
+import { NetworkEngine } from './NetworkEngine';
+import { CombatAndMedicineSystem } from './CombatAndMedicineSystem';
+import { LeaderNineLivesSystem } from './LeaderNineLivesSystem';
+import { soundEngine } from '../audio/SoundEngine';
+
+export class GameEngine3D {
+  private container: HTMLElement;
+  private renderer: THREE.WebGLRenderer;
+  private scene: THREE.Scene;
+  private camera: THREE.PerspectiveCamera;
+  private dirLight: THREE.DirectionalLight;
+  private hemiLight: THREE.HemisphereLight;
+
+  // Local Player
+  public playerState: PlayerRuntimeState;
+  private playerGroup: THREE.Group;
+  private playerRig: CatRigNodes;
+  private playerAnimator: CatAnimationController;
+
+  // World & Systems
+  private worldObjects: WorldObjects | null = null;
+  private preyManager: PreyEntityManager;
+  public networkEngine: NetworkEngine;
+
+  // Camera parameters
+  private cameraDistance = 3.8;
+  private cameraYaw = 0;
+  private cameraPitch = 0.28;
+  private isMouseDown = false;
+  private prevMouseX = 0;
+  private prevMouseY = 0;
+
+  // Movement & Input
+  private keys: Record<string, boolean> = {};
+  private clock = new THREE.Clock();
+  private animationFrameId: number | null = null;
+
+  // Callbacks to React UI
+  private onStateChange?: (state: PlayerRuntimeState) => void;
+  private onInteractPrompt?: (prompt: { text: string; action: () => void } | null) => void;
+  private onRealmTransitionRequested?: (realm: RealmId) => void;
+  private onProphecyVisionRequested?: () => void;
+  private onClanChangeRequested?: () => void;
+  private onDarkForestTrialRequested?: () => void;
+  private onMedicineDenOpened?: () => void;
+  private onLeaderLifeLost?: (remaining: number, msg: string) => void;
+  private onPlayerDied?: () => void;
+  private onChatMessage?: (msg: any) => void;
+
+  constructor(
+    container: HTMLElement,
+    character: PlayerCharacter,
+    callbacks: {
+      onStateChange?: (state: PlayerRuntimeState) => void;
+      onInteractPrompt?: (prompt: { text: string; action: () => void } | null) => void;
+      onRealmTransitionRequested?: (realm: RealmId) => void;
+      onProphecyVisionRequested?: () => void;
+      onClanChangeRequested?: () => void;
+      onDarkForestTrialRequested?: () => void;
+      onMedicineDenOpened?: () => void;
+      onLeaderLifeLost?: (remaining: number, msg: string) => void;
+      onPlayerDied?: () => void;
+      onChatMessage?: (msg: any) => void;
+    }
+  ) {
+    this.container = container;
+    Object.assign(this, callbacks);
+
+    // Initial Runtime State
+    this.playerState = {
+      id: character.id,
+      character,
+      position: { x: 0, y: -2.2, z: 8 },
+      rotation: { yaw: 0, pitch: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
+      animation: 'idle',
+      health: 100,
+      maxHealth: 100,
+      stamina: 100,
+      maxStamina: 100,
+      carriedPrey: null,
+      herbs: [],
+      injuries: [],
+      currentRealm: 'territory',
+      isSneaking: false,
+      isResting: false,
+      isScentSenseActive: false,
+      isDead: false,
+    };
+
+    // 1. Scene & Renderer
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0f172a);
+    this.scene.fog = new THREE.FogExp2(0x0f172a, 0.012);
+
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this.renderer.setSize(container.clientWidth, container.clientHeight);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(this.renderer.domElement);
+
+    // 2. Camera
+    this.camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 400);
+
+    // 3. Lighting
+    this.hemiLight = new THREE.HemisphereLight(0xfffbeb, 0x1e293b, 0.7);
+    this.scene.add(this.hemiLight);
+
+    this.dirLight = new THREE.DirectionalLight(0xffedd5, 1.2);
+    this.dirLight.position.set(40, 60, 30);
+    this.dirLight.castShadow = true;
+    this.dirLight.shadow.mapSize.width = 2048;
+    this.dirLight.shadow.mapSize.height = 2048;
+    this.dirLight.shadow.camera.near = 10;
+    this.dirLight.shadow.camera.far = 160;
+    this.dirLight.shadow.camera.left = -50;
+    this.dirLight.shadow.camera.right = 50;
+    this.dirLight.shadow.camera.top = 50;
+    this.dirLight.shadow.camera.bottom = -50;
+    this.scene.add(this.dirLight);
+
+    // 4. Build Player 3D Cat
+    const { group, rig } = CatMeshBuilder.buildCat(character.appearance);
+    this.playerGroup = group;
+    this.playerRig = rig;
+    this.playerAnimator = new CatAnimationController(rig);
+    this.playerGroup.position.set(this.playerState.position.x, this.playerState.position.y, this.playerState.position.z);
+    this.scene.add(this.playerGroup);
+
+    // 5. Systems
+    this.preyManager = new PreyEntityManager(this.scene);
+    this.networkEngine = new NetworkEngine(this.scene);
+    this.networkEngine.connect(
+      this.playerState,
+      (msg) => {
+        if (this.onChatMessage) this.onChatMessage(msg);
+      },
+      (freshKillCount) => {
+        if (this.worldObjects) {
+          WorldBuilder.updateFreshKillPileCount(this.worldObjects, freshKillCount);
+        }
+      }
+    );
+
+    // 6. Build Realm
+    this.loadRealm('territory');
+
+    // 7. Event listeners
+    this.bindEvents();
+
+    // Start loop
+    this.animate();
+  }
+
+  public loadRealm(realm: RealmId) {
+    if (this.worldObjects) {
+      this.scene.remove(this.worldObjects.realmGroup);
+    }
+    this.playerState.currentRealm = realm;
+    this.worldObjects = WorldBuilder.buildRealm(realm);
+    this.scene.add(this.worldObjects.realmGroup);
+
+    // Atmosphere tweaks per realm
+    if (realm === 'territory') {
+      this.scene.background = new THREE.Color(0x38bdf8); // Sunny day
+      this.scene.fog = new THREE.FogExp2(0x93c5fd, 0.008);
+      this.hemiLight.color.setHex(0xfffbeb);
+      this.hemiLight.groundColor.setHex(0x14532d);
+      this.hemiLight.intensity = 0.8;
+      this.dirLight.color.setHex(0xffedd5);
+      this.dirLight.intensity = 1.3;
+      this.playerGroup.position.set(0, -2.2, 8);
+      this.preyManager.initPrey(14);
+    } else if (realm === 'moonpool') {
+      this.scene.background = new THREE.Color(0x020617);
+      this.scene.fog = new THREE.FogExp2(0x0f172a, 0.015);
+      this.hemiLight.intensity = 0.3;
+      this.dirLight.intensity = 0.4;
+      this.playerGroup.position.set(0, 0.2, 12);
+      this.preyManager.clearAll();
+      soundEngine.playStarClanChime();
+    } else if (realm === 'starclan') {
+      this.scene.background = new THREE.Color(0x0f172a);
+      this.scene.fog = new THREE.FogExp2(0x1e1b4b, 0.006);
+      this.hemiLight.color.setHex(0xc7d2fe);
+      this.hemiLight.intensity = 0.9;
+      this.dirLight.color.setHex(0x93c5fd);
+      this.dirLight.intensity = 1.0;
+      this.playerGroup.position.set(0, 0.2, 8);
+      this.preyManager.clearAll();
+      soundEngine.playStarClanChime();
+    } else if (realm === 'darkforest') {
+      this.scene.background = new THREE.Color(0x09090b);
+      this.scene.fog = new THREE.FogExp2(0x27272a, 0.02);
+      this.hemiLight.color.setHex(0x581c87);
+      this.hemiLight.intensity = 0.4;
+      this.dirLight.color.setHex(0xdc2626);
+      this.dirLight.intensity = 0.5;
+      this.playerGroup.position.set(0, 0.2, 8);
+      this.preyManager.clearAll();
+      soundEngine.playDarkForestWhisper();
+    }
+  }
+
+  public updateAppearance(appearance: CatAppearance) {
+    this.scene.remove(this.playerGroup);
+    const { group, rig } = CatMeshBuilder.buildCat(appearance);
+    this.playerGroup = group;
+    this.playerRig = rig;
+    this.playerAnimator = new CatAnimationController(rig);
+    this.playerGroup.position.set(this.playerState.position.x, this.playerState.position.y, this.playerState.position.z);
+    this.scene.add(this.playerGroup);
+    this.playerState.character.appearance = appearance;
+  }
+
+  // ==========================================
+  // INPUT & CONTROLS
+  // ==========================================
+  private bindEvents() {
+    window.addEventListener('keydown', (e) => {
+      // Don't capture when typing in chat
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+
+      this.keys[e.code] = true;
+
+      if (e.code === 'KeyC') {
+        this.toggleSneak();
+      } else if (e.code === 'KeyV') {
+        this.toggleScentSense();
+      } else if (e.code === 'KeyF') {
+        this.triggerAttack('claw_swipe');
+      } else if (e.code === 'KeyR') {
+        this.triggerAttack('bite');
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      this.keys[e.code] = false;
+    });
+
+    const dom = this.renderer.domElement;
+    dom.addEventListener('mousedown', (e) => {
+      this.isMouseDown = true;
+      this.prevMouseX = e.clientX;
+      this.prevMouseY = e.clientY;
+    });
+
+    window.addEventListener('mouseup', () => {
+      this.isMouseDown = false;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!this.isMouseDown) return;
+      const dx = e.clientX - this.prevMouseX;
+      const dy = e.clientY - this.prevMouseY;
+      this.prevMouseX = e.clientX;
+      this.prevMouseY = e.clientY;
+
+      this.cameraYaw -= dx * 0.005;
+      this.cameraPitch = Math.max(0.05, Math.min(Math.PI / 2.2, this.cameraPitch - dy * 0.005));
+    });
+
+    dom.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      this.cameraDistance = Math.max(1.8, Math.min(9.0, this.cameraDistance + e.deltaY * 0.003));
+    });
+
+    window.addEventListener('resize', this.onResize);
+  }
+
+  private onResize = () => {
+    if (!this.container || !this.renderer || !this.camera) return;
+    const w = this.container.clientWidth;
+    const h = this.container.clientHeight;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h);
+  };
+
+  // ==========================================
+  // GAME ACTIONS
+  // ==========================================
+  public toggleSneak() {
+    this.playerState.isSneaking = !this.playerState.isSneaking;
+    if (this.playerState.isSneaking) {
+      this.playerAnimator.setState('sneak');
+    } else {
+      this.playerAnimator.setState('idle');
+    }
+  }
+
+  public toggleScentSense() {
+    this.playerState.isScentSenseActive = !this.playerState.isScentSenseActive;
+    if (this.worldObjects?.scentVisionGroup) {
+      this.worldObjects.scentVisionGroup.visible = this.playerState.isScentSenseActive;
+    }
+    if (this.playerState.isScentSenseActive) {
+      soundEngine.playPurr();
+    }
+  }
+
+  public triggerPounce() {
+    if (this.playerState.stamina < 15) return;
+    this.playerState.stamina -= 15;
+    this.playerAnimator.setState('pounce_leap');
+    soundEngine.playPounce();
+
+    // Catch prey check
+    const caught = this.preyManager.attemptCatch(this.playerGroup.position, true, this.playerState.isSneaking);
+    if (caught) {
+      this.setCarriedPrey(caught);
+    }
+
+    setTimeout(() => {
+      this.playerAnimator.setState('idle');
+    }, 600);
+  }
+
+  public triggerAttack(type: 'claw_swipe' | 'pounce' | 'bite') {
+    if (this.playerState.stamina < 10) return;
+    const res = CombatAndMedicineSystem.executeAttack(type, this.playerState);
+    this.playerState.stamina = Math.max(0, this.playerState.stamina - res.staminaUsed);
+    this.playerAnimator.setState(type === 'claw_swipe' ? 'claw_swipe' : (type === 'bite' ? 'bite' : 'pounce_leap'));
+
+    // Check catch if prey nearby
+    const caught = this.preyManager.attemptCatch(this.playerGroup.position, false, this.playerState.isSneaking);
+    if (caught) {
+      this.setCarriedPrey(caught);
+    }
+
+    setTimeout(() => {
+      this.playerAnimator.setState('idle');
+    }, 500);
+  }
+
+  public triggerEmote(emote: AnimationState) {
+    this.playerAnimator.setState(emote);
+    if (emote === 'hiss') soundEngine.playHiss();
+    if (emote === 'snarl') soundEngine.playGrowl();
+    if (emote === 'groom' || emote === 'sleep') soundEngine.playPurr();
+  }
+
+  public setCarriedPrey(prey: PreyItem | null) {
+    this.playerState.carriedPrey = prey;
+    // Clear mouth slot
+    while (this.playerRig.preyMouthGroup.children.length > 0) {
+      this.playerRig.preyMouthGroup.remove(this.playerRig.preyMouthGroup.children[0]);
+    }
+    if (prey) {
+      const pMesh = CatMeshBuilder.buildPreyMesh(prey.type);
+      pMesh.scale.set(0.6, 0.6, 0.6);
+      pMesh.rotation.x = Math.PI / 2;
+      this.playerRig.preyMouthGroup.add(pMesh);
+    }
+  }
+
+  public depositPreyToCamp() {
+    if (!this.playerState.carriedPrey) return;
+    const clan = this.playerState.character.clan;
+    this.networkEngine.sendDepositPrey(clan);
+    this.setCarriedPrey(null);
+    this.playerState.character.reputation += 10;
+    soundEngine.playPurr();
+  }
+
+  public eatPrey() {
+    if (!this.playerState.carriedPrey) return;
+    this.playerState.health = Math.min(this.playerState.maxHealth, this.playerState.health + this.playerState.carriedPrey.nutrition);
+    this.playerState.stamina = this.playerState.maxStamina;
+    this.setCarriedPrey(null);
+    soundEngine.playPurr();
+  }
+
+  public harvestHerb(node: { id: string; type: string; mesh: THREE.Group; harvested: boolean }) {
+    if (node.harvested) return;
+    node.harvested = true;
+    node.mesh.visible = false;
+    soundEngine.playPurr();
+
+    // Add to inventory
+    const existing = this.playerState.herbs.find((h) => h.type === node.type);
+    if (existing) {
+      existing.quantity += 1;
+    } else {
+      this.playerState.herbs.push({
+        id: `herb_${Date.now()}`,
+        type: node.type as HerbType,
+        name: node.type.charAt(0).toUpperCase() + node.type.slice(1),
+        description: 'Wild medicinal herb gathered in the forest.',
+        cures: 'Various clan wounds',
+        quantity: 1,
+      });
+    }
+
+    // Respawn node in 30 seconds
+    setTimeout(() => {
+      node.harvested = false;
+      node.mesh.visible = true;
+    }, 30000);
+  }
+
+  // ==========================================
+  // GAME LOOP
+  // ==========================================
+  private animate = () => {
+    this.animationFrameId = requestAnimationFrame(this.animate);
+    const delta = Math.min(this.clock.getDelta(), 0.1);
+
+    if (!this.playerState.isDead) {
+      this.handlePlayerMovement(delta);
+    }
+
+    // Update Player Animator
+    this.playerAnimator.update(delta);
+
+    // Update Prey
+    const playerSpeed = Math.sqrt(this.playerState.velocity.x ** 2 + this.playerState.velocity.z ** 2);
+    this.preyManager.update(delta, this.playerGroup.position, this.playerState.isSneaking, playerSpeed);
+
+    // Update Network & Remote Players
+    this.networkEngine.update(delta, this.playerState.currentRealm);
+    this.networkEngine.sendStateUpdate(this.playerState);
+
+    // Check Interactables
+    this.checkInteractables();
+
+    // Update Third-Person Camera
+    this.updateCamera();
+
+    // Water wave animation
+    if (this.worldObjects?.waterMeshes) {
+      this.worldObjects.waterMeshes.forEach((wm) => {
+        wm.position.y += Math.sin(Date.now() * 0.003) * 0.0005;
+      });
+    }
+
+    // Render
+    this.renderer.render(this.scene, this.camera);
+
+    // React state hook update
+    if (this.onStateChange) {
+      this.onStateChange({ ...this.playerState });
+    }
+  };
+
+  private handlePlayerMovement(delta: number) {
+    let moveX = 0;
+    let moveZ = 0;
+
+    if (this.keys['KeyW'] || this.keys['ArrowUp']) moveZ += 1;
+    if (this.keys['KeyS'] || this.keys['ArrowDown']) moveZ -= 1;
+    if (this.keys['KeyA'] || this.keys['ArrowLeft']) moveX += 1;
+    if (this.keys['KeyD'] || this.keys['ArrowRight']) moveX -= 1;
+
+    const isMoving = moveX !== 0 || moveZ !== 0;
+    const isSprinting = this.keys['ShiftLeft'] || this.keys['ShiftRight'];
+
+    let speed = 3.4; // normal walk/trot
+    if (this.playerState.isSneaking) {
+      speed = 1.4;
+    } else if (isSprinting && this.playerState.stamina > 5) {
+      speed = 7.2;
+      this.playerState.stamina = Math.max(0, this.playerState.stamina - 14 * delta);
+    } else {
+      // Regenerate stamina when not sprinting
+      this.playerState.stamina = Math.min(this.playerState.maxStamina, this.playerState.stamina + 10 * delta);
+    }
+
+    // Has Sprain injury? Slow down
+    const hasSprain = this.playerState.injuries.some((i) => i.type === 'sprain');
+    if (hasSprain) speed *= 0.7;
+
+    // Bleeding drains HP
+    const hasBleed = this.playerState.injuries.some((i) => i.type === 'bleeding');
+    if (hasBleed) {
+      this.playerState.health = Math.max(1, this.playerState.health - 1.5 * delta);
+    }
+
+    if (isMoving) {
+      // Calculate move angle relative to camera yaw
+      const moveAngle = Math.atan2(moveX, moveZ) + this.cameraYaw;
+      const vx = Math.sin(moveAngle) * speed;
+      const vz = Math.cos(moveAngle) * speed;
+
+      this.playerState.position.x += vx * delta;
+      this.playerState.position.z += vz * delta;
+
+      // Smooth rotate cat to face movement direction
+      let diff = moveAngle - this.playerGroup.rotation.y;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      this.playerGroup.rotation.y += diff * 12.0 * delta;
+      this.playerState.rotation.yaw = this.playerGroup.rotation.y;
+
+      // Set animation state
+      if (this.playerState.isSneaking) {
+        this.playerAnimator.setState('sneak');
+      } else if (isSprinting) {
+        this.playerAnimator.setState('sprint');
+      } else {
+        this.playerAnimator.setState('walk');
+      }
+
+      // Footsteps
+      if (Math.random() < 0.1) {
+        soundEngine.playFootstep('grass');
+      }
+    } else {
+      if (this.playerAnimator.getState() === 'walk' || this.playerAnimator.getState() === 'sprint') {
+        this.playerAnimator.setState(this.playerState.isSneaking ? 'sneak' : 'idle');
+      }
+    }
+
+    // Bounds restriction
+    this.playerState.position.x = Math.max(-95, Math.min(95, this.playerState.position.x));
+    this.playerState.position.z = Math.max(-95, Math.min(95, this.playerState.position.z));
+
+    this.playerGroup.position.x = this.playerState.position.x;
+    this.playerGroup.position.z = this.playerState.position.z;
+  }
+
+  private updateCamera() {
+    const target = this.playerGroup.position.clone().add(new THREE.Vector3(0, 0.45, 0));
+    const cx = target.x - Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * this.cameraDistance;
+    const cy = target.y + Math.sin(this.cameraPitch) * this.cameraDistance;
+    const cz = target.z - Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * this.cameraDistance;
+
+    this.camera.position.set(cx, cy, cz);
+    this.camera.lookAt(target);
+  }
+
+  private checkInteractables() {
+    if (!this.worldObjects) return;
+    const pPos = this.playerGroup.position;
+    let closestPrompt: { text: string; action: () => void } | null = null;
+
+    for (const item of this.worldObjects.interactables) {
+      const dist = pPos.distanceTo(item.position);
+      if (dist <= item.radius) {
+        if (item.type === 'fresh_kill_pile') {
+          if (this.playerState.carriedPrey) {
+            closestPrompt = {
+              text: `Press E to Deposit ${this.playerState.carriedPrey.name} into Fresh-Kill Pile`,
+              action: () => this.depositPreyToCamp(),
+            };
+          } else {
+            closestPrompt = {
+              text: 'Fresh-Kill Pile (Bring hunted prey here for Clan reputation)',
+              action: () => {},
+            };
+          }
+        } else if (item.type === 'moonpool_altar') {
+          closestPrompt = {
+            text: 'Press E to Touch Sacred Pool & Commune with StarClan',
+            action: () => {
+              if (this.onProphecyVisionRequested) this.onProphecyVisionRequested();
+            },
+          };
+        } else if (item.type === 'starclan_spirit') {
+          const spData = item.data as any;
+          closestPrompt = {
+            text: `Speak with ${spData.name}`,
+            action: () => {
+              if (this.onProphecyVisionRequested) this.onProphecyVisionRequested();
+            },
+          };
+        } else if (item.type === 'darkforest_instructor') {
+          closestPrompt = {
+            text: 'Enter Shadow Combat Training Trial',
+            action: () => {
+              if (this.onDarkForestTrialRequested) this.onDarkForestTrialRequested();
+            },
+          };
+        } else if (item.type === 'clan_change_stone') {
+          closestPrompt = {
+            text: 'Press E to Commune at Neutral Gathering Stone (Change Clan)',
+            action: () => {
+              if (this.onClanChangeRequested) this.onClanChangeRequested();
+            },
+          };
+        } else if (item.type === 'herb_plant') {
+          const herbNode = this.worldObjects.herbNodes.find((h) => h.id === item.id);
+          if (herbNode && !herbNode.harvested) {
+            closestPrompt = {
+              text: `Press E to Harvest ${(item.data as any).name}`,
+              action: () => this.harvestHerb(herbNode),
+            };
+          }
+        }
+        break;
+      }
+    }
+
+    if (this.onInteractPrompt) {
+      this.onInteractPrompt(closestPrompt);
+    }
+  }
+
+  public takeDamage(amount: number, cause: string = 'Combat wound') {
+    this.playerState.health = Math.max(0, this.playerState.health - amount);
+    this.playerAnimator.setState('hurt');
+
+    if (this.playerState.health <= 0) {
+      const res = LeaderNineLivesSystem.handleLethalDamage(this.playerState, cause, this.playerState.currentRealm);
+      if (res.resurrectedImmediately) {
+        if (this.onLeaderLifeLost) {
+          this.onLeaderLifeLost(res.remainingLives, res.message);
+        }
+      } else {
+        if (this.onPlayerDied) {
+          this.onPlayerDied();
+        }
+      }
+    }
+  }
+
+  public destroy() {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+    window.removeEventListener('resize', this.onResize);
+    this.networkEngine.disconnect();
+    this.renderer.dispose();
+    if (this.renderer.domElement.parentElement) {
+      this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);
+    }
+  }
+
+  public dispose() {
+    this.destroy();
+  }
+}
