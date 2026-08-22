@@ -531,7 +531,7 @@ export class CatMeshBuilder {
     }
 
     // ==========================================
-    // 5. LAYERED FUR SILHOUETTE (Cheek tufts, Neck ruff, Chest mane, Tail fluff)
+    // 5. LAYERED FUR SILHOUETTE (Cheek tufts, Neck ruff, Chest mane, Belly fluff, Leg feathering)
     // ==========================================
     const furGroup = new THREE.Group();
     root.add(furGroup);
@@ -546,9 +546,9 @@ export class CatMeshBuilder {
     const isVeryFluffy = appearance.furStyle === 'very_fluffy' || appearance.furStyle === 'thick_winter';
 
     if (appearance.furStyle !== 'very_short' && appearance.furStyle !== 'short_smooth') {
-      const cheekTuftScale = isVeryFluffy ? 1.6 : (isFluffy ? 1.25 : 0.8);
-      const tuftGeo = new THREE.ConeGeometry(0.06 * cheekTuftScale, 0.14 * cheekTuftScale, 4);
-      tuftGeo.scale(1.2, 0.6, 1.0);
+      const cheekTuftScale = isVeryFluffy ? 1.75 : (isFluffy ? 1.35 : 0.85);
+      const tuftGeo = new THREE.ConeGeometry(0.065 * cheekTuftScale, 0.15 * cheekTuftScale, 4);
+      tuftGeo.scale(1.25, 0.6, 1.0);
 
       // Left cheek fur tuft
       const leftCheekTuft = new THREE.Mesh(tuftGeo, coatMaterial);
@@ -562,21 +562,44 @@ export class CatMeshBuilder {
       rightCheekTuft.rotation.set(0.2, -0.2, -1.1);
       headGroup.add(rightCheekTuft);
 
+      // Secondary lower cheek flare for very fluffy
+      if (isVeryFluffy) {
+        const lowerTuftGeo = new THREE.ConeGeometry(0.05 * cheekTuftScale, 0.12 * cheekTuftScale, 4);
+        lowerTuftGeo.scale(1.1, 0.5, 0.9);
+
+        const lLower = new THREE.Mesh(lowerTuftGeo, coatMaterial);
+        lLower.position.set(-0.14, -0.09, 0.04);
+        lLower.rotation.set(0.1, 0.1, 1.3);
+        headGroup.add(lLower);
+
+        const rLower = new THREE.Mesh(lowerTuftGeo, coatMaterial);
+        rLower.position.set(0.14, -0.09, 0.04);
+        rLower.rotation.set(0.1, -0.1, -1.3);
+        headGroup.add(rLower);
+      }
+
       // Neck Ruff & Chest Apron
       if (isFluffy) {
-        const ruffGeo = new THREE.ConeGeometry(0.24, 0.28, 8);
-        ruffGeo.scale(1.25, 0.8, 1.1);
+        const ruffGeo = new THREE.ConeGeometry(0.25 * (isVeryFluffy ? 1.25 : 1.0), 0.3 * (isVeryFluffy ? 1.2 : 1.0), 8);
+        ruffGeo.scale(1.3, 0.85, 1.15);
         const ruffMesh = new THREE.Mesh(ruffGeo, coatMaterial);
         ruffMesh.position.set(0, 0.02, 0.12);
         ruffMesh.rotation.x = -0.6;
         neckGroup.add(ruffMesh);
 
-        // Fluffy chest apron
-        const chestTuftGeo = new THREE.SphereGeometry(0.16 * (isVeryFluffy ? 1.3 : 1.0), 8, 8);
-        chestTuftGeo.scale(1.1, 1.3, 0.8);
+        // Fluffy chest apron mane
+        const chestTuftGeo = new THREE.SphereGeometry(0.17 * (isVeryFluffy ? 1.35 : 1.0), 8, 8);
+        chestTuftGeo.scale(1.15, 1.35, 0.85);
         const chestTuft = new THREE.Mesh(chestTuftGeo, coatMaterial);
         chestTuft.position.set(0, -0.08, 0.28);
         bodyGroup.add(chestTuft);
+
+        // Belly fluff under-carriage hanging beneath the abdomen
+        const bellyFluffGeo = new THREE.SphereGeometry(0.15 * (isVeryFluffy ? 1.3 : 1.0), 8, 8);
+        bellyFluffGeo.scale(1.1, 0.65, 1.8);
+        const bellyFluff = new THREE.Mesh(bellyFluffGeo, coatMaterial);
+        bellyFluff.position.set(0, -0.16, -0.06);
+        bodyGroup.add(bellyFluff);
       }
     }
 
@@ -611,6 +634,16 @@ export class CatMeshBuilder {
     lfLower.castShadow = true;
     leftFrontForearm.add(lfLower);
 
+    // Foreleg feathering fluff
+    if (isFluffy) {
+      const featherGeo = new THREE.ConeGeometry(0.04 * (isVeryFluffy ? 1.4 : 1.0), 0.16 * (isVeryFluffy ? 1.3 : 1.0), 4);
+      featherGeo.scale(1.0, 0.4, 1.2);
+      const lfFeather = new THREE.Mesh(featherGeo, coatMaterial);
+      lfFeather.position.set(0, -legHeight * 0.25, -0.04);
+      lfFeather.rotation.set(-0.35, 0, 0);
+      leftFrontForearm.add(lfFeather);
+    }
+
     const leftFrontPaw = new THREE.Mesh(pawGeo, coatMaterial);
     leftFrontPaw.position.set(0, -legHeight * 0.52, 0.025);
     leftFrontPaw.castShadow = true;
@@ -641,6 +674,16 @@ export class CatMeshBuilder {
     rfLower.position.y = -legHeight * 0.25;
     rfLower.castShadow = true;
     rightFrontForearm.add(rfLower);
+
+    // Right Foreleg feathering fluff
+    if (isFluffy) {
+      const featherGeo = new THREE.ConeGeometry(0.04 * (isVeryFluffy ? 1.4 : 1.0), 0.16 * (isVeryFluffy ? 1.3 : 1.0), 4);
+      featherGeo.scale(1.0, 0.4, 1.2);
+      const rfFeather = new THREE.Mesh(featherGeo, coatMaterial);
+      rfFeather.position.set(0, -legHeight * 0.25, -0.04);
+      rfFeather.rotation.set(-0.35, 0, 0);
+      rightFrontForearm.add(rfFeather);
+    }
 
     const rightFrontPaw = new THREE.Mesh(pawGeo, coatMaterial);
     rightFrontPaw.position.set(0, -legHeight * 0.52, 0.025);
@@ -676,6 +719,16 @@ export class CatMeshBuilder {
     lbShin.castShadow = true;
     leftBackShin.add(lbShin);
 
+    // Left Hind Shin feathering / britches
+    if (isFluffy) {
+      const britchesGeo = new THREE.ConeGeometry(0.06 * (isVeryFluffy ? 1.5 : 1.1), 0.2 * (isVeryFluffy ? 1.3 : 1.0), 4);
+      britchesGeo.scale(1.1, 0.5, 1.3);
+      const lbBritches = new THREE.Mesh(britchesGeo, coatMaterial);
+      lbBritches.position.set(0, -legHeight * 0.2, -0.05);
+      lbBritches.rotation.set(-0.4, 0, 0);
+      leftBackShin.add(lbBritches);
+    }
+
     const leftBackPaw = new THREE.Mesh(pawGeo, coatMaterial);
     leftBackPaw.position.set(0, -legHeight * 0.52, 0.04);
     leftBackPaw.castShadow = true;
@@ -705,6 +758,16 @@ export class CatMeshBuilder {
     rbShin.rotation.x = 0.4;
     rbShin.castShadow = true;
     rightBackShin.add(rbShin);
+
+    // Right Hind Shin feathering / britches
+    if (isFluffy) {
+      const britchesGeo = new THREE.ConeGeometry(0.06 * (isVeryFluffy ? 1.5 : 1.1), 0.2 * (isVeryFluffy ? 1.3 : 1.0), 4);
+      britchesGeo.scale(1.1, 0.5, 1.3);
+      const rbBritches = new THREE.Mesh(britchesGeo, coatMaterial);
+      rbBritches.position.set(0, -legHeight * 0.2, -0.05);
+      rbBritches.rotation.set(-0.4, 0, 0);
+      rightBackShin.add(rbBritches);
+    }
 
     const rightBackPaw = new THREE.Mesh(pawGeo, coatMaterial);
     rightBackPaw.position.set(0, -legHeight * 0.52, 0.04);

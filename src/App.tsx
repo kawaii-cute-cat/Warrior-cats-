@@ -26,6 +26,7 @@ import { DarkForestTrialModal } from './components/DarkForestTrialModal';
 import { ClanChangeModal } from './components/ClanChangeModal';
 import { DeathRealmModal } from './components/DeathRealmModal';
 import { SettingsModal } from './components/SettingsModal';
+import { SpeechBubbleOverlay, WorldSpeechBubble } from './components/SpeechBubbleOverlay';
 import { soundEngine } from './audio/SoundEngine';
 
 export default function App() {
@@ -36,6 +37,8 @@ export default function App() {
   const [character, setCharacter] = useState<PlayerCharacter | null>(null);
   const [playerState, setPlayerState] = useState<PlayerRuntimeState | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [speechBubbles, setSpeechBubbles] = useState<WorldSpeechBubble[]>([]);
+  const [activeWaypoint, setActiveWaypoint] = useState<{ name: string; x: number; z: number } | null>(null);
   const [interactPrompt, setInteractPrompt] = useState<{ text: string; action: () => void } | null>(null);
 
   // Modal Open States
@@ -67,6 +70,16 @@ export default function App() {
         },
         onChatMessage: (msg) => {
           setChatMessages((prev) => [...prev.slice(-100), msg]);
+        },
+        onSpeechBubblesUpdate: (bubbles) => {
+          setSpeechBubbles(bubbles);
+        },
+        onWaypointUpdate: (wp) => {
+          if (wp) {
+            setActiveWaypoint({ name: wp.name, x: wp.x, z: wp.z });
+          } else {
+            setActiveWaypoint(null);
+          }
         },
         onProphecyVisionRequested: () => {
           setIsMoonpoolOpen(true);
@@ -121,7 +134,7 @@ export default function App() {
         senderName: 'Forest Guide',
         senderClan: character.clan,
         senderRole: 'Warrior',
-        text: 'Controls: WASD to run, Shift to sprint, C to stalk sneak, Space to pounce prey, V for scent vision, M for tactical map.',
+        text: 'Controls: WASD to run, Shift sprint, C stalk, Space pounce, V scent sense, M living tactical map, P character editor.',
         channel: 'system',
         timestamp: Date.now() + 100,
       }
@@ -137,7 +150,8 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger shortcuts if typing inside an input/textarea
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+      const activeEl = document.activeElement;
+      if (activeEl && (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeEl.tagName) || activeEl.getAttribute('contenteditable') === 'true')) {
         return;
       }
 
@@ -146,7 +160,6 @@ export default function App() {
       } else if (e.key === 'p' || e.key === 'P') {
         setIsCharacterEditorOpen((prev) => !prev);
       } else if (e.key === 'e' || e.key === 'E') {
-        // If interaction prompt exists, perform it, else open emote wheel
         if (interactPrompt) {
           interactPrompt.action();
         } else {
@@ -159,7 +172,19 @@ export default function App() {
       } else if (e.key === 'f' || e.key === 'F') {
         engineRef.current?.attack('claw_swipe');
       } else if (e.key === 'r' || e.key === 'R') {
-        engineRef.current?.attack('bite');
+        engineRef.current?.playEmote('sit');
+      } else if (e.key === 't' || e.key === 'T') {
+        engineRef.current?.playEmote('lay_down');
+      } else if (e.key === 'g' || e.key === 'G') {
+        engineRef.current?.playEmote('groom');
+      } else if (e.key === 'h' || e.key === 'H') {
+        engineRef.current?.playEmote('hiss');
+      } else if (e.key === 'j' || e.key === 'J') {
+        engineRef.current?.playEmote('snarl');
+      } else if (e.key === 'b' || e.key === 'B') {
+        engineRef.current?.playEmote('bow');
+      } else if (e.key === 'n' || e.key === 'N') {
+        engineRef.current?.playEmote('sleep');
       } else if (e.key === 'Escape') {
         setIsCharacterEditorOpen(false);
         setIsMapOpen(false);
@@ -240,6 +265,9 @@ export default function App() {
       {/* 3D WEBGL CANVAS VIEWPORT */}
       <div ref={canvasContainerRef} className="absolute inset-0 w-full h-full cursor-crosshair" />
 
+      {/* WORLD-SPACE 3D SPEECH BUBBLE BILLBOARDS */}
+      <SpeechBubbleOverlay bubbles={speechBubbles} />
+
       {/* IN-GAME HEADS-UP DISPLAY (HUD) */}
       {playerState && (
         <HUD
@@ -260,7 +288,7 @@ export default function App() {
         />
       )}
 
-      {/* MULTIPLAYER CHAT BOX (400-Character Limit & Filtering) */}
+      {/* MULTIPLAYER CHAT BOX (400-Character Limit & Selective Profanity Filtering) */}
       <ChatBox
         myPlayerId={character.id}
         myName={character.name}
@@ -290,11 +318,16 @@ export default function App() {
         </div>
       )}
 
-      {/* WORLD TACTICAL MAP */}
+      {/* LIVING WORLD TACTICAL MAP */}
       {isMapOpen && playerState && (
         <WorldMapModal
           playerState={playerState}
+          activeWaypoint={activeWaypoint}
           onClose={() => setIsMapOpen(false)}
+          onSetWaypoint={(wp) => {
+            setActiveWaypoint(wp);
+            engineRef.current?.setWaypoint(wp);
+          }}
           onFastTravel={handleFastTravel}
         />
       )}
@@ -339,10 +372,12 @@ export default function App() {
           onClose={() => setIsDarkForestTrialOpen(false)}
           onRewardAura={() => {
             if (character) {
-              setCharacter({
+              const updated = {
                 ...character,
-                appearance: { ...character.appearance, aura: 'darkforest_smoke' },
-              });
+                appearance: { ...character.appearance, aura: 'darkforest_smoke' as const },
+              };
+              setCharacter(updated);
+              engineRef.current?.updateCharacter(updated);
             }
           }}
         />
@@ -373,3 +408,4 @@ export default function App() {
     </div>
   );
 }
+

@@ -8,6 +8,17 @@ import { NetworkEngine } from './NetworkEngine';
 import { CombatAndMedicineSystem } from './CombatAndMedicineSystem';
 import { LeaderNineLivesSystem } from './LeaderNineLivesSystem';
 import { soundEngine } from '../audio/SoundEngine';
+import { WorldSpeechBubble } from '../components/SpeechBubbleOverlay';
+
+export interface ActiveSpeechBubbleData {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderClan: string;
+  text: string;
+  isRp: boolean;
+  expiresAt: number;
+}
 
 export class GameEngine3D {
   private container: HTMLElement;
@@ -27,6 +38,12 @@ export class GameEngine3D {
   private worldObjects: WorldObjects | null = null;
   private preyManager: PreyEntityManager;
   public networkEngine: NetworkEngine;
+
+  // Navigation Waypoint
+  private activeWaypoint: { name: string; x: number; z: number } | null = null;
+
+  // Speech Bubbles System
+  private activeBubbles: Map<string, ActiveSpeechBubbleData> = new Map();
 
   // Camera parameters
   private cameraDistance = 3.8;
@@ -51,7 +68,9 @@ export class GameEngine3D {
   private onMedicineDenOpened?: () => void;
   private onLeaderLifeLost?: (remaining: number, msg: string) => void;
   private onPlayerDied?: () => void;
-  private onChatMessage?: (msg: any) => void;
+  private onChatMessage?: (msg: ChatMessage) => void;
+  private onSpeechBubblesUpdate?: (bubbles: WorldSpeechBubble[]) => void;
+  private onWaypointUpdate?: (waypoint: { name: string; x: number; z: number; distance: number } | null) => void;
 
   constructor(
     container: HTMLElement,
@@ -66,7 +85,9 @@ export class GameEngine3D {
       onMedicineDenOpened?: () => void;
       onLeaderLifeLost?: (remaining: number, msg: string) => void;
       onPlayerDied?: () => void;
-      onChatMessage?: (msg: any) => void;
+      onChatMessage?: (msg: ChatMessage) => void;
+      onSpeechBubblesUpdate?: (bubbles: WorldSpeechBubble[]) => void;
+      onWaypointUpdate?: (waypoint: { name: string; x: number; z: number; distance: number } | null) => void;
     }
   ) {
     this.container = container;
@@ -140,6 +161,7 @@ export class GameEngine3D {
     this.networkEngine.connect(
       this.playerState,
       (msg) => {
+        this.addSpeechBubble(msg);
         if (this.onChatMessage) this.onChatMessage(msg);
       },
       (freshKillCount) => {
@@ -291,8 +313,38 @@ export class GameEngine3D {
     if (this.onStateChange) this.onStateChange({ ...this.playerState });
   }
 
+  public addSpeechBubble(msg: ChatMessage) {
+    if (!msg.text || msg.channel === 'system') return;
+    this.activeBubbles.set(msg.senderId, {
+      id: msg.id,
+      senderId: msg.senderId,
+      senderName: msg.senderName,
+      senderClan: msg.senderClan,
+      text: msg.text,
+      isRp: msg.channel === 'rp',
+      expiresAt: Date.now() + 6000,
+    });
+  }
+
   public broadcastChat(msg: ChatMessage) {
+    this.addSpeechBubble(msg);
     this.networkEngine.sendChatMessage(msg);
+  }
+
+  public setWaypoint(waypoint: { name: string; x: number; z: number } | null) {
+    this.activeWaypoint = waypoint;
+    if (this.onWaypointUpdate) {
+      if (waypoint) {
+        const dist = Math.hypot(this.playerState.position.x - waypoint.x, this.playerState.position.z - waypoint.z);
+        this.onWaypointUpdate({ ...waypoint, distance: Math.round(dist) });
+      } else {
+        this.onWaypointUpdate(null);
+      }
+    }
+  }
+
+  public clearWaypoint() {
+    this.setWaypoint(null);
   }
 
   public updateCharacter(newChar: PlayerCharacter) {
@@ -551,6 +603,90 @@ export class GameEngine3D {
 
     // Render
     this.renderer.render(this.scene, this.camera);
+
+    // Calculate & Project World-Space Speech Bubbles
+    const now = Date.now();
+    const projectedBubbles: WorldSpeechBubble[] = [];
+    const tempVec = new THREE.Vector3();
+
+    this.activeBubbles.forEach((bubble, key) => {
+      if (now > bubble.expiresAt) {
+        this.activeBubbles.delete(key);
+        return;
+      }
+
+      let worldHeadPos: THREE.Vector3 | null = null;
+      let speakerRealm: RealmId = this.playerState.currentRealm;
+
+      if (bubble.senderId === this.playerState.id) {
+        if (this.playerRig?.headGroup) {
+          worldHeadPos = this.playerRig.headGroup.getWorldPosition(tempVec.clone());
+        } else {
+          worldHeadPos = this.playerGroup.position.clone().add(new THREE.Vector3(0, 0.45, 0));
+        }
+        speakerRealm = this.playerState.currentRealm;
+      } else {
+        const rpList = this.networkEngine.getRemotePlayers();
+        const found = rpList.find((p) => p.id === bubble.senderId);
+        if (found && found.meshGroup.visible) {
+          if (found.rig?.headGroup) {
+            worldHeadPos = found.rig.headGroup.getWorldPosition(tempVec.clone());
+          } else {
+            worldHeadPos = found.meshGroup.position.clone().add(new THREE.Vector3(0, 0.45, 0));
+          }
+          speakerRealm = found.currentRealm;
+        }
+      }
+
+      if (worldHeadPos && speakerRealm === this.playerState.currentRealm) {
+        const bubbleAnchor = worldHeadPos.clone().add(new THREE.Vector3(0, 0.42, 0));
+        const distToCam = this.camera.position.distanceTo(bubbleAnchor);
+
+        const screenVec = bubbleAnchor.clone().project(this.camera);
+        const isInFront = screenVec.z < 1.0;
+
+        if (isInFront && distToCam < 48) {
+          const screenX = (screenVec.x * 0.5 + 0.5) * this.container.clientWidth;
+          const screenY = (-(screenVec.y * 0.5) + 0.5) * this.container.clientHeight;
+
+          const timeLeft = (bubble.expiresAt - now) / 1000;
+          const opacity = Math.min(1.0, timeLeft * 1.5);
+          const scale = Math.max(0.72, Math.min(1.08, 1.0 - (distToCam / 50) * 0.25));
+
+          projectedBubbles.push({
+            id: `${bubble.id}_${key}`,
+            senderId: bubble.senderId,
+            senderName: bubble.senderName,
+            senderClan: bubble.senderClan,
+            text: bubble.text,
+            isRp: bubble.isRp,
+            screenX,
+            screenY,
+            scale,
+            opacity,
+            visible: true,
+          });
+        }
+      }
+    });
+
+    if (this.onSpeechBubblesUpdate) {
+      this.onSpeechBubblesUpdate(projectedBubbles);
+    }
+
+    // Update Waypoint info
+    if (this.activeWaypoint && this.onWaypointUpdate) {
+      const dist = Math.hypot(
+        this.playerState.position.x - this.activeWaypoint.x,
+        this.playerState.position.z - this.activeWaypoint.z
+      );
+      this.onWaypointUpdate({
+        name: this.activeWaypoint.name,
+        x: this.activeWaypoint.x,
+        z: this.activeWaypoint.z,
+        distance: Math.round(dist),
+      });
+    }
 
     // React state hook update
     if (this.onStateChange) {

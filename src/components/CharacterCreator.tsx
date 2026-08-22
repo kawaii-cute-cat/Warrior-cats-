@@ -74,9 +74,9 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
 
   // 3D Preview Engine Reference
   const previewRef = useRef<{
-    scene: THREE.Scene;
-    camera: THREE.PerspectiveCamera;
-    renderer: THREE.WebGLRenderer;
+    scene: THREE.Scene | null;
+    camera: THREE.PerspectiveCamera | null;
+    renderer: THREE.WebGLRenderer | null;
     group: THREE.Group | null;
     rig: CatRigNodes | null;
     animator: CatAnimationController | null;
@@ -86,9 +86,9 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
     prevX: number;
     rotationY: number;
   }>({
-    scene: new THREE.Scene(),
-    camera: new THREE.PerspectiveCamera(45, 1, 0.1, 100),
-    renderer: null as any,
+    scene: null,
+    camera: null,
+    renderer: null,
     group: null,
     rig: null,
     animator: null,
@@ -99,24 +99,46 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
     rotationY: 0.3,
   });
 
-  // Setup 3D Canvas Preview
+  // Rebuild the 3D Cat Model mesh inside the scene
+  const rebuildCatMesh = (currentAppearance: CatAppearance, currentAnim: AnimationState) => {
+    const p = previewRef.current;
+    if (!p.scene) return;
+
+    if (p.group) {
+      p.scene.remove(p.group);
+      p.group = null;
+      p.rig = null;
+      p.animator = null;
+    }
+
+    const { group, rig } = CatMeshBuilder.buildCat(currentAppearance);
+    group.rotation.y = p.rotationY;
+    p.scene.add(group);
+    p.group = group;
+    p.rig = rig;
+    p.animator = new CatAnimationController(rig);
+    p.animator.setState(currentAnim);
+  };
+
+  // Setup 3D Canvas Preview with guaranteed initialization lifecycle
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
-    const w = container.clientWidth;
-    const h = container.clientHeight;
+    const initialW = Math.max(container.clientWidth, 320);
+    const initialH = Math.max(container.clientHeight, 320);
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x18181b);
 
-    const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 50);
-    camera.position.set(0, 0.6, cameraZoom);
-    camera.lookAt(0, 0.2, 0);
+    const camera = new THREE.PerspectiveCamera(45, initialW / initialH, 0.1, 50);
+    camera.position.set(0, 0.55, cameraZoom);
+    camera.lookAt(0, 0.22, 0);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(w, h);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    renderer.setSize(initialW, initialH);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
+    container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
     // Studio Lighting
@@ -155,9 +177,13 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
       rotationY: 0.3,
     };
 
+    // Build the initial cat mesh immediately
+    rebuildCatMesh(appearance, previewAnimation);
+
     // Render loop
     const animate = () => {
       const p = previewRef.current;
+      if (!p.renderer || !p.scene || !p.camera) return;
       p.animId = requestAnimationFrame(animate);
       const delta = p.clock.getDelta();
 
@@ -175,16 +201,18 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
 
     animate();
 
-    const handleResize = () => {
-      if (!container || !renderer) return;
-      const nw = container.clientWidth;
-      const nh = container.clientHeight;
-      camera.aspect = nw / nh;
-      camera.updateProjectionMatrix();
-      renderer.setSize(nw, nh);
-    };
-
-    window.addEventListener('resize', handleResize);
+    // Use ResizeObserver for accurate sizing on initial mount & layout transitions
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0 && renderer && camera) {
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(width, height);
+        }
+      }
+    });
+    resizeObserver.observe(container);
 
     // Drag to rotate controls
     const onMouseDown = (e: MouseEvent) => {
@@ -219,7 +247,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
     window.addEventListener('mouseup', onMouseUp);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       container.removeEventListener('mousedown', onMouseDown);
       container.removeEventListener('wheel', onWheel);
       window.removeEventListener('mousemove', onMouseMove);
@@ -231,28 +259,17 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
+      previewRef.current.scene = null;
+      previewRef.current.camera = null;
+      previewRef.current.renderer = null;
     };
   }, []);
 
-  // Rebuild 3D Cat Model on appearance change
+  // Rebuild 3D Cat Model whenever appearance changes
   useEffect(() => {
-    const p = previewRef.current;
-    if (!p.scene || !p.renderer) return;
-
-    if (p.group) {
-      p.scene.remove(p.group);
-      p.group = null;
-      p.rig = null;
-      p.animator = null;
+    if (previewRef.current.scene) {
+      rebuildCatMesh(appearance, previewAnimation);
     }
-
-    const { group, rig } = CatMeshBuilder.buildCat(appearance);
-    group.rotation.y = p.rotationY;
-    p.scene.add(group);
-    p.group = group;
-    p.rig = rig;
-    p.animator = new CatAnimationController(rig);
-    p.animator.setState(previewAnimation);
   }, [appearance]);
 
   // Update animation in preview
