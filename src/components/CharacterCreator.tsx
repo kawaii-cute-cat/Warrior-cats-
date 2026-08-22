@@ -1,41 +1,78 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { AccessoryType, AuraType, BodyType, CatAppearance, ClanId, ClanRole, EarShape, EyeState, FurStyle, MarkingType, MuzzleShape, PlayerCharacter, ScarType } from '../types/game';
+import { 
+  AccessoryType, 
+  AnimationState, 
+  AuraType, 
+  BodyType, 
+  CatAppearance, 
+  ClanId, 
+  ClanRole, 
+  EarShape, 
+  EyeState, 
+  FurStyle, 
+  MarkingType, 
+  MuzzleShape, 
+  PlayerCharacter, 
+  ScarType 
+} from '../types/game';
 import { CAT_NAME_PREFIXES, CAT_NAME_SUFFIXES, CLAN_LORE, COLOR_PALETTE, DEFAULT_APPEARANCE } from '../constants/clans';
 import { CatMeshBuilder, CatRigNodes } from '../game/CatMeshBuilder';
 import { CatAnimationController } from '../game/CatAnimationController';
 import { 
-  Sparkles, 
   RotateCw, 
   Shuffle, 
-  Check, 
-  Flame, 
   Eye, 
   Feather, 
   Shield, 
-  Heart,
-  Palette,
-  Layers,
-  Sparkle
+  Palette, 
+  Layers, 
+  Sparkles, 
+  User, 
+  X, 
+  ZoomIn, 
+  ZoomOut, 
+  Play, 
+  FileText,
+  Sliders
 } from 'lucide-react';
 import { soundEngine } from '../audio/SoundEngine';
 
 interface CharacterCreatorProps {
+  initialCharacter?: PlayerCharacter | null;
   onComplete: (character: PlayerCharacter) => void;
+  onCancel?: () => void;
 }
 
-export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }) => {
+export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
+  initialCharacter,
+  onComplete,
+  onCancel,
+}) => {
   const mountRef = useRef<HTMLDivElement>(null);
 
-  // Character State
-  const [namePrefix, setNamePrefix] = useState('Bramble');
-  const [nameSuffix, setNameSuffix] = useState('claw');
-  const [selectedClan, setSelectedClan] = useState<ClanId>('ThunderClan');
-  const [selectedRole, setSelectedRole] = useState<ClanRole>('Warrior');
-  const [appearance, setAppearance] = useState<CatAppearance>({ ...DEFAULT_APPEARANCE });
-  const [activeTab, setActiveTab] = useState<'clan' | 'body' | 'fur' | 'colors' | 'face' | 'accessories' | 'auras'>('clan');
+  // Character Identity State
+  const [nameMode, setNameMode] = useState<'clan' | 'custom'>(
+    initialCharacter ? (CAT_NAME_PREFIXES.includes(initialCharacter.prefix) ? 'clan' : 'custom') : 'clan'
+  );
+  const [namePrefix, setNamePrefix] = useState(initialCharacter?.prefix || 'Bramble');
+  const [nameSuffix, setNameSuffix] = useState(initialCharacter?.suffix || 'claw');
+  const [customFullName, setCustomFullName] = useState(initialCharacter?.name || 'Brambleclaw');
+  const [bio, setBio] = useState(initialCharacter?.bio || '');
+  const [selectedClan, setSelectedClan] = useState<ClanId>(initialCharacter?.clan || 'ThunderClan');
+  const [selectedRole, setSelectedRole] = useState<ClanRole>(initialCharacter?.role || 'Warrior');
+  
+  // Cat Appearance State
+  const [appearance, setAppearance] = useState<CatAppearance>(
+    initialCharacter?.appearance ? { ...initialCharacter.appearance } : { ...DEFAULT_APPEARANCE }
+  );
 
-  // 3D Preview Engine
+  // Active Tab
+  const [activeTab, setActiveTab] = useState<'identity' | 'body' | 'pelt' | 'face' | 'tail_paws' | 'accessories' | 'scars' | 'auras'>('identity');
+  const [previewAnimation, setPreviewAnimation] = useState<AnimationState>('idle');
+  const [cameraZoom, setCameraZoom] = useState(2.8);
+
+  // 3D Preview Engine Reference
   const previewRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -73,7 +110,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
     scene.background = new THREE.Color(0x18181b);
 
     const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 50);
-    camera.position.set(0, 0.6, 2.8);
+    camera.position.set(0, 0.6, cameraZoom);
     camera.lookAt(0, 0.2, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -82,8 +119,8 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
     renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // Soft Studio Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffedd5, 0x18181b, 0.9);
+    // Studio Lighting
+    const hemiLight = new THREE.HemisphereLight(0xffedd5, 0x18181b, 0.95);
     scene.add(hemiLight);
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -97,7 +134,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
 
     // Floor Pedestal
     const pedestal = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.2, 1.3, 0.1, 32),
+      new THREE.CylinderGeometry(1.25, 1.35, 0.1, 32),
       new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.8, metalness: 0.2 })
     );
     pedestal.position.y = -0.05;
@@ -129,7 +166,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
       }
 
       if (p.group && !p.isDragging) {
-        p.rotationY += delta * 0.15; // Slow gentle display turntable
+        p.rotationY += delta * 0.15; // Gentle rotation
         p.group.rotation.y = p.rotationY;
       }
 
@@ -165,13 +202,26 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
       previewRef.current.isDragging = false;
     };
 
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setCameraZoom((prev) => {
+        const next = Math.max(1.5, Math.min(4.5, prev + e.deltaY * 0.002));
+        if (previewRef.current.camera) {
+          previewRef.current.camera.position.z = next;
+        }
+        return next;
+      });
+    };
+
     container.addEventListener('mousedown', onMouseDown);
+    container.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       container.removeEventListener('mousedown', onMouseDown);
+      container.removeEventListener('wheel', onWheel);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
       if (previewRef.current.animId !== null) {
@@ -202,8 +252,27 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
     p.group = group;
     p.rig = rig;
     p.animator = new CatAnimationController(rig);
-    p.animator.setState('idle');
+    p.animator.setState(previewAnimation);
   }, [appearance]);
+
+  // Update animation in preview
+  const handleSetPreviewAnimation = (anim: AnimationState) => {
+    setPreviewAnimation(anim);
+    if (previewRef.current.animator) {
+      previewRef.current.animator.setState(anim);
+    }
+  };
+
+  // Adjust Camera Zoom
+  const handleZoom = (delta: number) => {
+    setCameraZoom((prev) => {
+      const next = Math.max(1.5, Math.min(4.5, prev + delta));
+      if (previewRef.current.camera) {
+        previewRef.current.camera.position.z = next;
+      }
+      return next;
+    });
+  };
 
   // Randomize generator
   const handleRandomize = () => {
@@ -212,6 +281,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
     const randomSuf = CAT_NAME_SUFFIXES[Math.floor(Math.random() * CAT_NAME_SUFFIXES.length)];
     setNamePrefix(randomPre);
     setNameSuffix(randomSuf);
+    setCustomFullName(`${randomPre}${randomSuf.toLowerCase()}`);
 
     const furs = COLOR_PALETTE.fur;
     const eyes = COLOR_PALETTE.eyes;
@@ -236,6 +306,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
       earShape: earShapes[Math.floor(Math.random() * earShapes.length)],
       muzzleShape: muzzleShapes[Math.floor(Math.random() * muzzleShapes.length)],
       bodyType: bodyTypes[Math.floor(Math.random() * bodyTypes.length)],
+      bodyScale: 0.85 + Math.random() * 0.35,
       eyeColorLeft: eye1,
       eyeColorRight: Math.random() > 0.85 ? eye2 : eye1,
       isHeterochromia: Math.random() > 0.85,
@@ -249,330 +320,400 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
     });
   };
 
-  const handleStartGame = () => {
+  const computedName = nameMode === 'clan' 
+    ? `${namePrefix}${nameSuffix.toLowerCase()}` 
+    : (customFullName.trim() || `${namePrefix}${nameSuffix.toLowerCase()}`);
+
+  const handleSaveCharacter = () => {
     soundEngine.playStarClanChime();
-    const character: PlayerCharacter = {
-      id: `cat_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-      name: `${namePrefix}${nameSuffix.toLowerCase()}`,
-      prefix: namePrefix,
-      suffix: nameSuffix.toLowerCase(),
+    const characterData: PlayerCharacter = {
+      id: initialCharacter?.id || `cat_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name: computedName,
+      prefix: nameMode === 'clan' ? namePrefix : computedName,
+      suffix: nameMode === 'clan' ? nameSuffix.toLowerCase() : '',
       clan: selectedClan,
       role: selectedRole,
+      bio: bio.trim(),
       appearance,
-      leaderLives: selectedRole === 'Leader' ? 9 : 0,
+      leaderLives: selectedRole === 'Leader' ? (initialCharacter?.leaderLives ?? 9) : 0,
       maxLeaderLives: selectedRole === 'Leader' ? 9 : 0,
-      reputation: 100,
-      deathHistory: [],
-      createdAt: new Date().toISOString(),
+      reputation: initialCharacter?.reputation ?? 100,
+      deathHistory: initialCharacter?.deathHistory ?? [],
+      createdAt: initialCharacter?.createdAt || new Date().toISOString(),
       lastPlayed: new Date().toISOString(),
     };
-    onComplete(character);
+    onComplete(characterData);
   };
 
   return (
     <div className="relative w-full h-full flex flex-col lg:flex-row bg-stone-950 text-stone-100 select-none overflow-hidden">
-      {/* LEFT: 3D HERO PREVIEW STAGE */}
-      <div className="relative flex-1 h-[45vh] lg:h-full bg-gradient-to-b from-stone-900 via-stone-950 to-stone-950 flex flex-col items-center justify-center overflow-hidden border-b lg:border-b-0 lg:border-r border-stone-800">
-        {/* Clan Tag & Name Header */}
+      {/* ================= LEFT: 3D LIVE TURNTABLE PREVIEW ================= */}
+      <div className="relative flex-1 h-[40vh] lg:h-full bg-gradient-to-b from-stone-900 via-stone-950 to-stone-950 flex flex-col items-center justify-center overflow-hidden border-b lg:border-b-0 lg:border-r border-stone-800">
+        {/* Top Info & Back Button */}
         <div className="absolute top-4 left-4 z-10 flex flex-col">
-          <span className="text-[10px] font-black tracking-widest uppercase text-amber-400/80">
-            {CLAN_LORE[selectedClan]?.name || selectedClan}
+          <span className="text-[10px] font-black tracking-widest uppercase text-amber-400/90 flex items-center gap-1.5">
+            <span>🐾</span>
+            <span>{CLAN_LORE[selectedClan]?.name || selectedClan}</span>
           </span>
-          <span className="text-xl font-black text-stone-100 tracking-wider">
-            {namePrefix}{nameSuffix.toLowerCase()}
+          <span className="text-2xl font-black text-stone-100 tracking-wide drop-shadow-md">
+            {computedName}
           </span>
           <span className="text-xs font-bold text-amber-300">
-            {selectedRole}
+            {selectedRole} • {CLAN_LORE[selectedClan]?.motto || ''}
           </span>
         </div>
+
+        {/* Close/Cancel Button if in-game */}
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="absolute top-4 right-4 z-10 p-2.5 bg-stone-900/80 hover:bg-stone-800 text-stone-300 hover:text-white rounded-xl border border-stone-700 backdrop-blur-md transition shadow-lg flex items-center gap-1.5 text-xs font-bold"
+          >
+            <X className="w-4 h-4" />
+            <span>Cancel</span>
+          </button>
+        )}
 
         {/* 3D Canvas Mount Point */}
         <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
-        {/* Bottom Preview Controls */}
-        <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between pointer-events-none">
-          <div className="text-[11px] text-stone-400 bg-stone-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-stone-800 flex items-center gap-1.5 pointer-events-auto">
-            <RotateCw className="w-3.5 h-3.5 text-stone-400 animate-spin" />
-            <span>Click and drag to rotate cat</span>
+        {/* Floating Turntable & Animation Controls */}
+        <div className="absolute bottom-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+          <div className="flex items-center gap-2 pointer-events-auto">
+            <div className="text-[11px] text-stone-400 bg-stone-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-stone-800 flex items-center gap-1.5">
+              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Drag to rotate</span>
+            </div>
+
+            <button
+              onClick={() => handleZoom(-0.4)}
+              className="p-2 bg-stone-900/80 hover:bg-stone-800 text-stone-300 rounded-xl border border-stone-800 transition"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleZoom(0.4)}
+              className="p-2 bg-stone-900/80 hover:bg-stone-800 text-stone-300 rounded-xl border border-stone-800 transition"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Animation Pose Selector */}
+          <div className="flex items-center gap-1 bg-stone-900/90 backdrop-blur-md p-1 rounded-xl border border-stone-800 pointer-events-auto">
+            <span className="text-[10px] uppercase font-bold text-stone-400 px-1.5 flex items-center gap-1">
+              <Play className="w-2.5 h-2.5" /> Pose:
+            </span>
+            {(['idle', 'walk', 'sit', 'groom', 'pounce_leap', 'hiss', 'sleep'] as AnimationState[]).map((anim) => (
+              <button
+                key={anim}
+                onClick={() => handleSetPreviewAnimation(anim)}
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold transition capitalize ${
+                  previewAnimation === anim
+                    ? 'bg-amber-500 text-stone-950 shadow-sm'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                {anim.replace('_', ' ')}
+              </button>
+            ))}
           </div>
 
           <button
             onClick={handleRandomize}
-            className="pointer-events-auto flex items-center gap-2 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30 px-4 py-2 rounded-xl text-xs font-bold transition shadow-lg"
+            className="pointer-events-auto flex items-center gap-1.5 bg-stone-900/90 hover:bg-stone-800 text-amber-400 font-bold px-3 py-1.5 rounded-xl border border-amber-500/30 text-xs transition active:scale-95 shadow-md"
           >
-            <Shuffle className="w-4 h-4" />
+            <Shuffle className="w-3.5 h-3.5" />
             <span>Randomize</span>
           </button>
         </div>
       </div>
 
-      {/* RIGHT: DEEP CUSTOMIZATION WORKBENCH */}
-      <div className="w-full lg:w-[480px] h-[55vh] lg:h-full flex flex-col bg-stone-900 border-stone-800 overflow-hidden">
-        {/* HEADER */}
-        <div className="p-4 border-b border-stone-800 bg-stone-950/60">
-          <h1 className="text-xl font-black text-amber-400 tracking-wider flex items-center gap-2">
-            <span>🐾</span> WILDCLANS CHARACTER FORGE
-          </h1>
-          <p className="text-xs text-stone-400 mt-0.5">
-            Craft your warrior cat's lineage, pelt markings, and celestial destiny.
-          </p>
-
-          {/* NAME INPUT GENERATOR */}
-          <div className="grid grid-cols-2 gap-2 mt-3">
-            <div>
-              <label className="text-[10px] uppercase font-bold text-stone-400 block mb-1">Prefix</label>
-              <select
-                value={namePrefix}
-                onChange={(e) => setNamePrefix(e.target.value)}
-                className="w-full bg-stone-800 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-stone-100 font-bold focus:outline-none focus:border-amber-400"
-              >
-                {CAT_NAME_PREFIXES.map((pre) => (
-                  <option key={pre} value={pre}>{pre}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] uppercase font-bold text-stone-400 block mb-1">Suffix</label>
-              <select
-                value={nameSuffix}
-                onChange={(e) => setNameSuffix(e.target.value)}
-                className="w-full bg-stone-800 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-stone-100 font-bold focus:outline-none focus:border-amber-400"
-              >
-                {CAT_NAME_SUFFIXES.map((suf) => (
-                  <option key={suf} value={suf}>{suf}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* WORKBENCH TABS */}
-        <div className="flex border-b border-stone-800 bg-stone-950/40 overflow-x-auto scrollbar-none px-2 pt-2 gap-1">
+      {/* ================= RIGHT: CUSTOMIZATION CONTROLS SUITE ================= */}
+      <div className="w-full lg:w-[480px] h-[60vh] lg:h-full flex flex-col bg-stone-900/95 border-stone-800">
+        {/* Navigation Tabs Header */}
+        <div className="p-2 border-b border-stone-800 bg-stone-950/70 overflow-x-auto flex gap-1.5 scrollbar-thin">
           {[
-            { id: 'clan', label: 'Clan & Role', icon: <Shield className="w-3.5 h-3.5" /> },
-            { id: 'body', label: 'Body', icon: <Layers className="w-3.5 h-3.5" /> },
-            { id: 'fur', label: 'Fur & Coat', icon: <Palette className="w-3.5 h-3.5" /> },
-            { id: 'face', label: 'Face & Ears', icon: <Eye className="w-3.5 h-3.5" /> },
-            { id: 'accessories', label: 'Decorations', icon: <Feather className="w-3.5 h-3.5" /> },
-            { id: 'auras', label: 'Celestial Auras', icon: <Sparkles className="w-3.5 h-3.5" /> },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-t-xl transition whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'bg-stone-800 text-amber-300 border-t-2 border-amber-400'
-                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
-              }`}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
-          ))}
+            { id: 'identity', label: 'Identity', icon: User },
+            { id: 'body', label: 'Body', icon: Sliders },
+            { id: 'pelt', label: 'Pelt', icon: Palette },
+            { id: 'face', label: 'Face', icon: Eye },
+            { id: 'tail_paws', label: 'Tail & Paws', icon: Layers },
+            { id: 'accessories', label: 'Items', icon: Feather },
+            { id: 'scars', label: 'Scars', icon: Shield },
+            { id: 'auras', label: 'Auras', icon: Sparkles },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  soundEngine.playFootstep('grass');
+                  setActiveTab(tab.id as any);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition ${
+                  isActive
+                    ? 'bg-amber-500 text-stone-950 shadow-md font-black'
+                    : 'bg-stone-900/60 text-stone-400 hover:text-stone-200 hover:bg-stone-800/80 border border-stone-800'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* TAB CONTENTS (Scrollable) */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* TAB 1: CLAN & ROLE */}
-          {activeTab === 'clan' && (
-            <div className="space-y-4">
+        {/* Scrollable Tab Body */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin">
+          {/* TAB 1: IDENTITY & CLAN ALLEGIANCE */}
+          {activeTab === 'identity' && (
+            <div className="space-y-5">
+              {/* Name Mode Toggle */}
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Choose Your Clan</label>
-                <div className="grid grid-cols-1 gap-2">
+                <label className="text-xs font-bold text-stone-300 block mb-2">Naming Style</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setNameMode('clan')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                      nameMode === 'clan'
+                        ? 'bg-amber-950/60 border-amber-400 text-amber-200 shadow-sm'
+                        : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
+                    }`}
+                  >
+                    <span>🌲</span>
+                    <span>Clan Prefix + Suffix</span>
+                  </button>
+                  <button
+                    onClick={() => setNameMode('custom')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                      nameMode === 'custom'
+                        ? 'bg-amber-950/60 border-amber-400 text-amber-200 shadow-sm'
+                        : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
+                    }`}
+                  >
+                    <span>✏️</span>
+                    <span>Freeform Custom Name</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Clan Name Generator */}
+              {nameMode === 'clan' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-stone-300 block mb-1.5">Name Prefix</label>
+                    <select
+                      value={namePrefix}
+                      onChange={(e) => setNamePrefix(e.target.value)}
+                      className="w-full bg-stone-950 border border-stone-700 rounded-xl p-2.5 text-xs text-stone-200 font-bold focus:outline-none focus:border-amber-400"
+                    >
+                      {CAT_NAME_PREFIXES.map((pre) => (
+                        <option key={pre} value={pre}>
+                          {pre}-
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-stone-300 block mb-1.5">Name Suffix</label>
+                    <select
+                      value={nameSuffix}
+                      onChange={(e) => setNameSuffix(e.target.value)}
+                      className="w-full bg-stone-950 border border-stone-700 rounded-xl p-2.5 text-xs text-stone-200 font-bold focus:outline-none focus:border-amber-400"
+                    >
+                      {CAT_NAME_SUFFIXES.map((suf) => (
+                        <option key={suf} value={suf}>
+                          -{suf}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-bold text-stone-300 block mb-1.5">Custom Full Cat Name</label>
+                  <input
+                    type="text"
+                    maxLength={30}
+                    value={customFullName}
+                    onChange={(e) => setCustomFullName(e.target.value)}
+                    placeholder="e.g. Scourge, Rusty, Moon-whisper..."
+                    className="w-full bg-stone-950 border border-stone-700 rounded-xl p-2.5 text-xs text-stone-200 font-bold focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+              )}
+
+              {/* Clan Allegiance Selection */}
+              <div>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Clan Allegiance</label>
+                <div className="grid grid-cols-2 gap-2">
                   {(Object.keys(CLAN_LORE) as ClanId[]).map((clanKey) => {
-                    const c = CLAN_LORE[clanKey];
-                    const isSel = selectedClan === clanKey;
+                    const clan = CLAN_LORE[clanKey];
+                    const isSelected = selectedClan === clanKey;
                     return (
-                      <div
+                      <button
                         key={clanKey}
-                        onClick={() => setSelectedClan(clanKey)}
-                        className={`cursor-pointer p-3 rounded-xl border transition ${
-                          isSel
-                            ? 'bg-stone-800/90 border-amber-400 ring-1 ring-amber-400 shadow-lg'
-                            : 'bg-stone-950/60 border-stone-800 hover:border-stone-700'
+                        onClick={() => {
+                          setSelectedClan(clanKey);
+                          soundEngine.playFootstep('grass');
+                        }}
+                        className={`p-3 rounded-xl border text-left transition flex flex-col ${
+                          isSelected
+                            ? 'bg-amber-950/60 border-amber-400 text-amber-200 shadow-md ring-1 ring-amber-400'
+                            : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-stone-100 text-sm flex items-center gap-2">
-                            <span>{c.badgeIcon}</span> {c.name}
-                          </span>
-                          {isSel && <Check className="w-4 h-4 text-amber-400" />}
-                        </div>
-                        <p className="text-[11px] text-amber-200/80 italic mt-1">{c.motto}</p>
-                        <p className="text-[11px] text-stone-400 mt-1">{c.description}</p>
-                      </div>
+                        <span className="font-black text-xs text-stone-200">{clan.name}</span>
+                        <span className="text-[11px] text-amber-400/80 font-bold mt-0.5">{clan.territoryName || clan.motto}</span>
+                      </button>
                     );
                   })}
                 </div>
               </div>
 
+              {/* Clan Rank / Role */}
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Select Rank / Role</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['Kit', 'Apprentice', 'Warrior', 'Medicine Cat', 'Deputy', 'Leader'] as ClanRole[]).map((role) => (
+                <label className="text-xs font-bold text-stone-300 block mb-2">Clan Role & Status</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Leader', 'Deputy', 'Warrior', 'Medicine Cat', 'Apprentice', 'Elder', 'Kit', 'Rogue'] as ClanRole[]).map((role) => (
                     <button
                       key={role}
-                      onClick={() => {
-                        setSelectedRole(role);
-                        if (role === 'Kit') setAppearance({ ...appearance, bodyType: 'kit' });
-                        if (role === 'Apprentice') setAppearance({ ...appearance, bodyType: 'apprentice' });
-                        if (role === 'Leader') setAppearance({ ...appearance, bodyType: 'large_warrior' });
-                      }}
-                      className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
+                      onClick={() => setSelectedRole(role)}
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-center transition ${
                         selectedRole === role
-                          ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-300 hover:border-stone-700'
+                          ? 'bg-amber-950/60 border-amber-400 text-amber-200 shadow-sm'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
                       }`}
                     >
                       {role}
-                      {role === 'Leader' && <span className="block text-[9px] text-amber-400 font-normal">9 Star Lives</span>}
-                      {role === 'Medicine Cat' && <span className="block text-[9px] text-emerald-400 font-normal">Herbal Healing</span>}
                     </button>
                   ))}
                 </div>
               </div>
+
+              {/* Bio & Backstory */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-stone-300 flex items-center gap-1">
+                    <FileText className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Backstory & Personality (Bio)</span>
+                  </label>
+                  <span className="text-[10px] text-stone-500">{bio.length}/400</span>
+                </div>
+                <textarea
+                  maxLength={400}
+                  rows={3}
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Describe your cat's origins, personality, loyalties, or destiny..."
+                  className="w-full bg-stone-950 border border-stone-700 rounded-xl p-2.5 text-xs text-stone-200 font-medium focus:outline-none focus:border-amber-400 resize-none"
+                />
+              </div>
             </div>
           )}
 
-          {/* TAB 2: BODY PROPORTIONS */}
+          {/* TAB 2: BODY & STATURE */}
           {activeTab === 'body' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Body Build Archetype</label>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Body Frame & Build</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'kit', name: 'Kit (Small)' },
-                    { id: 'apprentice', name: 'Apprentice' },
-                    { id: 'adult', name: 'Adult Warrior' },
-                    { id: 'large_warrior', name: 'Large Warrior (Tall & Muscular)' },
-                    { id: 'slender_hunter', name: 'Slender Hunter (Agile)' },
-                  ].map((b) => (
+                    { id: 'adult', label: 'Balanced' },
+                    { id: 'slender_hunter', label: 'Slender Hunter' },
+                    { id: 'large_warrior', label: 'Heavy Brute' },
+                  ].map((bt) => (
                     <button
-                      key={b.id}
-                      onClick={() => setAppearance({ ...appearance, bodyType: b.id as any })}
-                      className={`p-2 rounded-xl border text-xs font-bold text-center transition ${
-                        appearance.bodyType === b.id
+                      key={bt.id}
+                      onClick={() => setAppearance({ ...appearance, bodyType: bt.id as any })}
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-center transition ${
+                        appearance.bodyType === bt.id
                           ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-300 hover:border-stone-700'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-400'
                       }`}
                     >
-                      {b.name}
+                      {bt.label}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-1">
-                  Leg Length ({appearance.legLength ? appearance.legLength.toFixed(2) : '1.00'}x)
-                </label>
-                <input
-                  type="range"
-                  min="0.8"
-                  max="1.3"
-                  step="0.05"
-                  value={appearance.legLength || 1.0}
-                  onChange={(e) => setAppearance({ ...appearance, legLength: parseFloat(e.target.value) })}
-                  className="w-full accent-amber-400"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-stone-300 block mb-1">
-                  Paw Scale ({appearance.pawSize ? appearance.pawSize.toFixed(2) : '1.00'}x)
-                </label>
-                <input
-                  type="range"
-                  min="0.8"
-                  max="1.3"
-                  step="0.05"
-                  value={appearance.pawSize || 1.0}
-                  onChange={(e) => setAppearance({ ...appearance, pawSize: parseFloat(e.target.value) })}
-                  className="w-full accent-amber-400"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-stone-300 block mb-1">
-                  Tail Length ({appearance.tailLength.toFixed(2)}x)
-                </label>
-                <input
-                  type="range"
-                  min="0.6"
-                  max="1.4"
-                  step="0.05"
-                  value={appearance.tailLength}
-                  onChange={(e) => setAppearance({ ...appearance, tailLength: parseFloat(e.target.value) })}
-                  className="w-full accent-amber-400"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-stone-300 block mb-1">
-                  Tail Thickness ({appearance.tailThickness ? appearance.tailThickness.toFixed(2) : '1.00'}x)
-                </label>
-                <input
-                  type="range"
-                  min="0.7"
-                  max="1.5"
-                  step="0.05"
-                  value={appearance.tailThickness || 1.0}
-                  onChange={(e) => setAppearance({ ...appearance, tailThickness: parseFloat(e.target.value) })}
-                  className="w-full accent-amber-400"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: FUR & COAT */}
-          {activeTab === 'fur' && (
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Fur Silhouette Style</label>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Fur Style & Fluffiness</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'short_smooth', name: 'Sleek & Smooth' },
-                    { id: 'medium', name: 'Medium Wildcat' },
-                    { id: 'fluffy', name: 'Fluffy Neck Ruff' },
-                    { id: 'very_fluffy', name: 'Lion Mane & Plume Tail' },
+                    { id: 'short_smooth', label: 'Sleek Short-Hair' },
+                    { id: 'medium', label: 'Classic Forest Fur' },
+                    { id: 'fluffy', label: 'Fluffy Thick Coat' },
+                    { id: 'very_fluffy', label: 'Longhair Mane (Fluffiest)' },
                   ].map((fs) => (
                     <button
                       key={fs.id}
                       onClick={() => setAppearance({ ...appearance, furStyle: fs.id as any })}
-                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
                         appearance.furStyle === fs.id
                           ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-300 hover:border-stone-700'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-400'
                       }`}
                     >
-                      {fs.name}
+                      {fs.label}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Coat Markings Pattern</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
+                  <span>Overall Size & Stature</span>
+                  <span className="text-amber-400">{Math.round((appearance.bodyScale || 1.0) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.7"
+                  max="1.3"
+                  step="0.05"
+                  value={appearance.bodyScale || 1.0}
+                  onChange={(e) => setAppearance({ ...appearance, bodyScale: parseFloat(e.target.value) })}
+                  className="w-full accent-amber-500"
+                />
+                <div className="flex justify-between text-[10px] text-stone-500 mt-1">
+                  <span>Kit / Apprentice</span>
+                  <span>Average Warrior</span>
+                  <span>Giant Brute</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: PELT PATTERNS & COLORS */}
+          {activeTab === 'pelt' && (
+            <div className="space-y-5">
+              {/* Marking Pattern */}
+              <div>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Marking Pattern</label>
+                <div className="grid grid-cols-3 gap-2">
                   {[
                     { id: 'solid', name: 'Solid Pure' },
-                    { id: 'classic_tabby', name: 'Classic Tabby Swirls' },
-                    { id: 'mackerel_tabby', name: 'Mackerel Tiger Stripes' },
-                    { id: 'spotted', name: 'Spotted Leopard' },
-                    { id: 'ticked', name: 'Agouti Ticked' },
-                    { id: 'colorpoint', name: 'Colorpoint Mask & Paws' },
-                    { id: 'calico', name: 'Tri-Color Calico' },
-                    { id: 'tortoiseshell', name: 'Tortoiseshell Mottled' },
-                    { id: 'bicolor', name: 'Bicolor Tuxedo / Blaze' },
-                    { id: 'white_chest', name: 'White Star Chest' },
+                    { id: 'classic_tabby', name: 'Classic Tabby' },
+                    { id: 'mackerel_tabby', name: 'Tiger Tabby' },
+                    { id: 'spotted', name: 'Leopard Spotted' },
+                    { id: 'colorpoint', name: 'Siamese Point' },
+                    { id: 'calico', name: 'Calico Patch' },
+                    { id: 'tortoiseshell', name: 'Tortoiseshell' },
+                    { id: 'bicolor', name: 'Tuxedo Bicolor' },
+                    { id: 'white_chest', name: 'White Chest Blaze' },
                   ].map((m) => (
                     <button
                       key={m.id}
                       onClick={() => setAppearance({ ...appearance, markingType: m.id as any })}
-                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-center transition ${
                         appearance.markingType === m.id
                           ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-300 hover:border-stone-700'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-400'
                       }`}
                     >
                       {m.name}
@@ -581,15 +722,19 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
                 </div>
               </div>
 
+              {/* Primary Fur Color */}
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Primary Coat Color</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-stone-300">Primary Pelt Coat Color</label>
+                  <div className="w-5 h-5 rounded-full border border-stone-600" style={{ backgroundColor: appearance.primaryColor }} />
+                </div>
+                <div className="grid grid-cols-7 gap-1.5">
                   {COLOR_PALETTE.fur.map((c) => (
                     <button
                       key={c.name}
                       onClick={() => setAppearance({ ...appearance, primaryColor: c.hex })}
-                      className={`w-7 h-7 rounded-lg border-2 transition ${
-                        appearance.primaryColor === c.hex ? 'border-amber-400 scale-110 shadow-md' : 'border-stone-700 hover:scale-105'
+                      className={`h-8 rounded-lg border-2 transition ${
+                        appearance.primaryColor === c.hex ? 'border-amber-400 scale-105 shadow-md' : 'border-transparent hover:border-stone-600'
                       }`}
                       style={{ backgroundColor: c.hex }}
                       title={c.name}
@@ -598,15 +743,40 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
                 </div>
               </div>
 
+              {/* Secondary Pattern Color */}
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Secondary Stripe / Patch Color</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-stone-300">Secondary / Stripe Color</label>
+                  <div className="w-5 h-5 rounded-full border border-stone-600" style={{ backgroundColor: appearance.secondaryColor }} />
+                </div>
+                <div className="grid grid-cols-7 gap-1.5">
                   {COLOR_PALETTE.fur.map((c) => (
                     <button
                       key={c.name}
                       onClick={() => setAppearance({ ...appearance, secondaryColor: c.hex })}
-                      className={`w-7 h-7 rounded-lg border-2 transition ${
-                        appearance.secondaryColor === c.hex ? 'border-amber-400 scale-110 shadow-md' : 'border-stone-700 hover:scale-105'
+                      className={`h-8 rounded-lg border-2 transition ${
+                        appearance.secondaryColor === c.hex ? 'border-amber-400 scale-105 shadow-md' : 'border-transparent hover:border-stone-600'
+                      }`}
+                      style={{ backgroundColor: c.hex }}
+                      title={c.name}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Underbelly & Chest Color */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-stone-300">Underbelly & Muzzle Tint</label>
+                  <div className="w-5 h-5 rounded-full border border-stone-600" style={{ backgroundColor: appearance.underbellyColor }} />
+                </div>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {COLOR_PALETTE.fur.map((c) => (
+                    <button
+                      key={c.name}
+                      onClick={() => setAppearance({ ...appearance, underbellyColor: c.hex })}
+                      className={`h-8 rounded-lg border-2 transition ${
+                        appearance.underbellyColor === c.hex ? 'border-amber-400 scale-105 shadow-md' : 'border-transparent hover:border-stone-600'
                       }`}
                       style={{ backgroundColor: c.hex }}
                       title={c.name}
@@ -617,71 +787,38 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
             </div>
           )}
 
-          {/* TAB 4: FACE, EARS & EYES */}
+          {/* TAB 4: FACE & EYES */}
           {activeTab === 'face' && (
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Muzzle Shape Profile</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'short', name: 'Snub / Compact' },
-                    { id: 'normal', name: 'Normal Feline' },
-                    { id: 'long', name: 'Elongated Wildcat' },
-                  ].map((ms) => (
-                    <button
-                      key={ms.id}
-                      onClick={() => setAppearance({ ...appearance, muzzleShape: ms.id as any, muzzleLength: ms.id === 'short' ? 0.78 : (ms.id === 'long' ? 1.25 : 1.0) })}
-                      className={`p-2 rounded-xl border text-xs font-bold text-center transition ${
-                        appearance.muzzleShape === ms.id
-                          ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-300'
-                      }`}
-                    >
-                      {ms.name}
-                    </button>
-                  ))}
-                </div>
+            <div className="space-y-5">
+              {/* Heterochromia toggle */}
+              <div className="flex items-center justify-between p-3 bg-stone-950/40 rounded-xl border border-stone-800">
+                <span className="text-xs font-bold text-stone-300">Heterochromia (Different Eye Colors)</span>
+                <input
+                  type="checkbox"
+                  checked={appearance.isHeterochromia}
+                  onChange={(e) => setAppearance({ ...appearance, isHeterochromia: e.target.checked })}
+                  className="w-4 h-4 accent-amber-500"
+                />
               </div>
 
+              {/* Eye Colors */}
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Ear Shape</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'normal', name: 'Standard Triangular' },
-                    { id: 'pointed', name: 'Tall Pointed Oriental' },
-                    { id: 'rounded', name: 'Curved Rounded' },
-                    { id: 'tufted', name: 'Lynx Ear Tufts' },
-                  ].map((es) => (
-                    <button
-                      key={es.id}
-                      onClick={() => setAppearance({ ...appearance, earShape: es.id as any, earTufts: es.id === 'tufted' ? true : appearance.earTufts })}
-                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
-                        appearance.earShape === es.id
-                          ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-300'
-                      }`}
-                    >
-                      {es.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Eye Color Palette</label>
-                <div className="flex flex-wrap gap-2">
+                <label className="text-xs font-bold text-stone-300 block mb-2">
+                  {appearance.isHeterochromia ? 'Left Eye Color' : 'Eye Color'}
+                </label>
+                <div className="grid grid-cols-6 gap-1.5">
                   {COLOR_PALETTE.eyes.map((c) => (
                     <button
                       key={c.name}
-                      onClick={() =>
+                      onClick={() => {
                         setAppearance({
                           ...appearance,
                           eyeColorLeft: c.hex,
                           eyeColorRight: appearance.isHeterochromia ? appearance.eyeColorRight : c.hex,
-                        })
-                      }
-                      className={`w-7 h-7 rounded-lg border-2 transition ${
-                        appearance.eyeColorLeft === c.hex ? 'border-amber-400 scale-110 shadow-md' : 'border-stone-700'
+                        });
+                      }}
+                      className={`h-8 rounded-lg border-2 transition ${
+                        appearance.eyeColorLeft === c.hex ? 'border-amber-400 scale-105 shadow-md' : 'border-transparent hover:border-stone-600'
                       }`}
                       style={{ backgroundColor: c.hex }}
                       title={c.name}
@@ -690,24 +827,45 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
                 </div>
               </div>
 
+              {appearance.isHeterochromia && (
+                <div>
+                  <label className="text-xs font-bold text-stone-300 block mb-2">Right Eye Color</label>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {COLOR_PALETTE.eyes.map((c) => (
+                      <button
+                        key={c.name}
+                        onClick={() => setAppearance({ ...appearance, eyeColorRight: c.hex })}
+                        className={`h-8 rounded-lg border-2 transition ${
+                          appearance.eyeColorRight === c.hex ? 'border-amber-400 scale-105 shadow-md' : 'border-transparent hover:border-stone-600'
+                        }`}
+                        style={{ backgroundColor: c.hex }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Eye Condition */}
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Eye Vision & Blindness State</label>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Eye Sight & State</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'normal', name: 'Keen Sight (Normal)' },
-                    { id: 'blind_left', name: 'Blind Left Eye (Milky Cataract)' },
-                    { id: 'blind_right', name: 'Blind Right Eye (Milky Cataract)' },
-                    { id: 'blind_both', name: 'Blind in Both Eyes (Jayfeather)' },
-                    { id: 'star_shine', name: 'StarClan Shimmer Glow' },
+                    { id: 'normal', name: 'Sharp Sighted' },
+                    { id: 'narrowed', name: 'Narrowed Fierce' },
+                    { id: 'blind_left', name: 'Blind Left Eye' },
+                    { id: 'blind_right', name: 'Blind Right Eye' },
+                    { id: 'blind_both', name: 'Blind Both Eyes (Jayfeather)' },
+                    { id: 'star_shine', name: 'StarClan Shimmer' },
                     { id: 'amber_glow', name: 'Predator Amber Glow' },
                   ].map((es) => (
                     <button
                       key={es.id}
                       onClick={() => setAppearance({ ...appearance, eyeState: es.id as any })}
-                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
                         appearance.eyeState === es.id
                           ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-300'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-400'
                       }`}
                     >
                       {es.name}
@@ -715,17 +873,131 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
                   ))}
                 </div>
               </div>
+
+              {/* Muzzle & Ears Sliders */}
+              <div className="space-y-4 pt-2 border-t border-stone-800">
+                <div>
+                  <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
+                    <span>Muzzle Length</span>
+                    <span className="text-amber-400">{Math.round((appearance.muzzleLength || 1.0) * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="1.3"
+                    step="0.05"
+                    value={appearance.muzzleLength || 1.0}
+                    onChange={(e) => setAppearance({ ...appearance, muzzleLength: parseFloat(e.target.value) })}
+                    className="w-full accent-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
+                    <span>Ear Size</span>
+                    <span className="text-amber-400">{Math.round((appearance.earSize || 1.0) * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="1.35"
+                    step="0.05"
+                    value={appearance.earSize || 1.0}
+                    onChange={(e) => setAppearance({ ...appearance, earSize: parseFloat(e.target.value) })}
+                    className="w-full accent-amber-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-stone-950/40 rounded-xl border border-stone-800">
+                  <span className="text-xs font-bold text-stone-300">Lynx Ear Tufts</span>
+                  <input
+                    type="checkbox"
+                    checked={appearance.earTufts}
+                    onChange={(e) => setAppearance({ ...appearance, earTufts: e.target.checked })}
+                    className="w-4 h-4 accent-amber-500"
+                  />
+                </div>
+              </div>
             </div>
           )}
 
-          {/* TAB 5: ACCESSORIES & SCARS */}
+          {/* TAB 5: TAIL & PAWS */}
+          {activeTab === 'tail_paws' && (
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
+                  <span>Tail Length</span>
+                  <span className="text-amber-400">{Math.round((appearance.tailLength || 1.0) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.6"
+                  max="1.4"
+                  step="0.05"
+                  value={appearance.tailLength || 1.0}
+                  onChange={(e) => setAppearance({ ...appearance, tailLength: parseFloat(e.target.value) })}
+                  className="w-full accent-amber-500"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
+                  <span>Tail Thickness</span>
+                  <span className="text-amber-400">{Math.round((appearance.tailThickness || 1.0) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.6"
+                  max="1.5"
+                  step="0.05"
+                  value={appearance.tailThickness || 1.0}
+                  onChange={(e) => setAppearance({ ...appearance, tailThickness: parseFloat(e.target.value) })}
+                  className="w-full accent-amber-500"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
+                  <span>Leg Length</span>
+                  <span className="text-amber-400">{Math.round((appearance.legLength || 1.0) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.8"
+                  max="1.25"
+                  step="0.05"
+                  value={appearance.legLength || 1.0}
+                  onChange={(e) => setAppearance({ ...appearance, legLength: parseFloat(e.target.value) })}
+                  className="w-full accent-amber-500"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
+                  <span>Paw Size</span>
+                  <span className="text-amber-400">{Math.round((appearance.pawSize || 1.0) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.8"
+                  max="1.3"
+                  step="0.05"
+                  value={appearance.pawSize || 1.0}
+                  onChange={(e) => setAppearance({ ...appearance, pawSize: parseFloat(e.target.value) })}
+                  className="w-full accent-amber-500"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: ACCESSORIES & FOREST FINERY */}
           {activeTab === 'accessories' && (
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Natural Forest Decorations</label>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Natural Forest Accoutrements</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'none', name: 'No Accessory' },
+                    { id: 'none', name: 'No Item' },
                     { id: 'oak_leaves', name: 'Oak Leaf Sprig' },
                     { id: 'blue_feather', name: 'Blue Jay Feather' },
                     { id: 'cardinal_feather', name: 'Cardinal Feather' },
@@ -739,10 +1011,10 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
                     <button
                       key={acc.id}
                       onClick={() => setAppearance({ ...appearance, accessory: acc.id as any })}
-                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
+                      className={`p-3 rounded-xl border text-xs font-bold text-left transition ${
                         appearance.accessory === acc.id
                           ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-300'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
                       }`}
                     >
                       {acc.name}
@@ -750,57 +1022,66 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
                   ))}
                 </div>
               </div>
+            </div>
+          )}
 
-              <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Battle Scars</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'none', name: 'Pristine Pelt' },
-                    { id: 'torn_left_ear', name: 'Torn Left Ear' },
-                    { id: 'torn_right_ear', name: 'Torn Right Ear' },
-                    { id: 'muzzle_scratch', name: 'Muzzle Claw Scratch' },
-                    { id: 'shoulder_claw_marks', name: 'Shoulder Claw Marks' },
-                  ].map((sc) => (
-                    <button
-                      key={sc.id}
-                      onClick={() => setAppearance({ ...appearance, scar: sc.id as any })}
-                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
-                        appearance.scar === sc.id
-                          ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-300'
-                      }`}
-                    >
-                      {sc.name}
-                    </button>
-                  ))}
-                </div>
+          {/* TAB 7: BATTLE SCARS */}
+          {activeTab === 'scars' && (
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-stone-300 block mb-1">Battle Scars & War Marks</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'none', name: 'Pristine Pelt' },
+                  { id: 'torn_left_ear', name: 'Torn Left Ear' },
+                  { id: 'torn_right_ear', name: 'Torn Right Ear' },
+                  { id: 'muzzle_scratch', name: 'Muzzle Claw Cut' },
+                  { id: 'shoulder_claw_marks', name: 'Shoulder Claw Marks' },
+                  { id: 'blind_eye_slash', name: 'Eye Claw Slash' },
+                  { id: 'tail_nick', name: 'Tail Notch Cut' },
+                  { id: 'cross_scars', name: 'Cross Chest Scars' },
+                  { id: 'chest_scar', name: 'Torso Battle Slash' },
+                  { id: 'flank_scar', name: 'Flank Claw Marks' },
+                  { id: 'battle_worn_all', name: 'Battle-Worn Veteran' },
+                ].map((sc) => (
+                  <button
+                    key={sc.id}
+                    onClick={() => setAppearance({ ...appearance, scar: sc.id as any })}
+                    className={`p-3 rounded-xl border text-xs font-bold text-left transition ${
+                      appearance.scar === sc.id
+                        ? 'bg-amber-950/60 border-amber-400 text-amber-200'
+                        : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
+                    }`}
+                  >
+                    {sc.name}
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
-          {/* TAB 6: CELESTIAL AURAS */}
+          {/* TAB 8: CELESTIAL AURAS */}
           {activeTab === 'auras' && (
             <div className="space-y-3">
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-stone-400 mb-2">
                 Special particle effects bestowed upon blessed or cursed cats.
               </p>
               <div className="grid grid-cols-1 gap-2">
                 {[
-                  { id: 'none', name: 'Standard Forest Aura', desc: 'Natural wild cat presence.' },
+                  { id: 'none', name: 'Standard Forest Presence', desc: 'Natural forest cat aura.' },
                   { id: 'starclan_stars', name: 'StarClan Stardust', desc: 'Glistening silver particles floating like Silverpelt.' },
                   { id: 'darkforest_smoke', name: 'Dark Forest Shadow Smoke', desc: 'Murky shadowy mist trailing in your wake.' },
-                  { id: 'celestial_shimmer', name: 'Celestial Aurora Bloom', desc: 'Soft cyan glow reflecting the Moonpool.' },
+                  { id: 'celestial_shimmer', name: 'Celestial Moonpool Bloom', desc: 'Soft glowing radiance reflecting the Moonpool.' },
                 ].map((au) => (
                   <button
                     key={au.id}
                     onClick={() => setAppearance({ ...appearance, aura: au.id as any })}
                     className={`p-3 rounded-xl border text-left transition ${
                       appearance.aura === au.id
-                        ? 'bg-indigo-950/70 border-indigo-400 text-indigo-200 ring-1 ring-indigo-400'
-                        : 'bg-stone-950/40 border-stone-800 text-stone-300 hover:border-stone-700'
+                        ? 'bg-amber-950/70 border-amber-400 text-amber-200 ring-1 ring-amber-400'
+                        : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
                     }`}
                   >
-                    <span className="font-bold text-xs block">{au.name}</span>
+                    <span className="font-bold text-xs block text-stone-200">{au.name}</span>
                     <span className="text-[11px] text-stone-400 block mt-0.5">{au.desc}</span>
                   </button>
                 ))}
@@ -809,14 +1090,22 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onComplete }
           )}
         </div>
 
-        {/* EMBARK BUTTON */}
-        <div className="p-4 border-t border-stone-800 bg-stone-950">
+        {/* EMBARK / SAVE FOOTER */}
+        <div className="p-4 border-t border-stone-800 bg-stone-950 flex gap-2">
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="flex-1 py-3 px-4 rounded-2xl bg-stone-900 hover:bg-stone-800 text-stone-300 font-bold text-xs border border-stone-700 transition"
+            >
+              Cancel
+            </button>
+          )}
           <button
-            onClick={handleStartGame}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-stone-950 font-black py-3 px-6 rounded-2xl text-sm uppercase tracking-wider shadow-2xl transition active:scale-[0.98]"
+            onClick={handleSaveCharacter}
+            className="flex-[2] flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-stone-950 font-black py-3 px-6 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition active:scale-[0.98]"
           >
             <span>🐾</span>
-            <span>Embark into the Wild Clans</span>
+            <span>{initialCharacter ? 'Save & Return to Clan' : 'Embark into the Wild Clans'}</span>
           </button>
         </div>
       </div>

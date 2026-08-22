@@ -22,6 +22,7 @@ import {
 interface HUDProps {
   playerState: PlayerRuntimeState;
   interactPrompt: { text: string; action: () => void } | null;
+  onOpenCharacter: () => void;
   onOpenMap: () => void;
   onOpenStarMap: () => void;
   onOpenEmotes: () => void;
@@ -38,6 +39,7 @@ interface HUDProps {
 export const HUD: React.FC<HUDProps> = ({
   playerState,
   interactPrompt,
+  onOpenCharacter,
   onOpenMap,
   onOpenStarMap,
   onOpenEmotes,
@@ -69,10 +71,14 @@ export const HUD: React.FC<HUDProps> = ({
       {/* ================= TOP BAR ================= */}
       <div className="flex items-start justify-between">
         {/* PLAYER STATUS CARD */}
-        <div className="pointer-events-auto flex items-center gap-3 bg-stone-900/85 backdrop-blur-md border border-stone-700/60 p-3 rounded-2xl shadow-2xl max-w-md">
+        <div 
+          onClick={onOpenCharacter}
+          className="pointer-events-auto cursor-pointer flex items-center gap-3 bg-stone-900/85 hover:bg-stone-900/95 backdrop-blur-md border border-stone-700/60 hover:border-amber-500/50 p-3 rounded-2xl shadow-2xl max-w-md transition group"
+          title="Click to open Character Customization / Editor (P)"
+        >
           {/* Avatar circle */}
           <div 
-            className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl font-bold shadow-inner relative border border-white/20"
+            className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl font-bold shadow-inner relative border border-white/20 group-hover:scale-105 transition"
             style={{ backgroundColor: character.appearance.primaryColor }}
           >
             <span>{clan.badgeIcon}</span>
@@ -86,7 +92,7 @@ export const HUD: React.FC<HUDProps> = ({
           {/* Name & Bars */}
           <div className="flex-1 min-w-[200px]">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-stone-100 font-bold text-base tracking-wide flex items-center gap-1.5">
+              <span className="text-stone-100 font-bold text-base tracking-wide flex items-center gap-1.5 group-hover:text-amber-300 transition">
                 {character.name}
               </span>
               <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-stone-800 text-amber-300 border border-amber-500/30">
@@ -95,7 +101,7 @@ export const HUD: React.FC<HUDProps> = ({
             </div>
 
             {/* Clan label */}
-            <p className="text-xs text-stone-400 mb-1.5">{clan.name}</p>
+            <p className="text-xs text-stone-400 mb-1.5">{clan.name} • <span className="text-[10px] text-amber-400/80 font-bold">Edit [P]</span></p>
 
             {/* Health Bar */}
             <div className="w-full bg-stone-950/80 h-3 rounded-full overflow-hidden p-0.5 border border-stone-800 relative mb-1">
@@ -149,11 +155,20 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
 
           <button
+            onClick={onOpenCharacter}
+            className="flex items-center gap-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-500/40 px-3 py-2 rounded-xl text-xs font-bold transition shadow-lg"
+            title="Edit Character & WCUE Appearance"
+          >
+            <span>🐱</span>
+            <span>Character (P)</span>
+          </button>
+
+          <button
             onClick={onOpenStarMap}
             className="flex items-center gap-1.5 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 border border-indigo-500/40 px-3 py-2 rounded-xl text-xs font-bold transition shadow-lg"
           >
             <Navigation className="w-4 h-4 text-indigo-400" />
-            <span>Star Map / Lore</span>
+            <span>Star Map</span>
           </button>
 
           <button
@@ -169,7 +184,7 @@ export const HUD: React.FC<HUDProps> = ({
             className="flex items-center gap-1.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/40 px-3 py-2 rounded-xl text-xs font-bold transition shadow-lg"
           >
             <Feather className="w-4 h-4 text-emerald-400" />
-            <span>Herb Pouch ({playerState.herbs.reduce((sum, h) => sum + h.quantity, 0)})</span>
+            <span>Herbs ({playerState.herbs.reduce((sum, h) => sum + h.quantity, 0)})</span>
           </button>
 
           <button

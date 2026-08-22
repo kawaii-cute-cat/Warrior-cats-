@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AnimationState, CatAppearance, HerbType, PlayerCharacter, PlayerRuntimeState, PreyItem, RealmId } from '../types/game';
+import { AnimationState, CatAppearance, ChatMessage, HerbType, PlayerCharacter, PlayerRuntimeState, PreyItem, RealmId } from '../types/game';
 import { CatMeshBuilder, CatRigNodes } from './CatMeshBuilder';
 import { CatAnimationController } from './CatAnimationController';
 import { WorldBuilder, WorldObjects } from './WorldBuilder';
@@ -176,14 +176,18 @@ export class GameEngine3D {
       this.hemiLight.intensity = 0.8;
       this.dirLight.color.setHex(0xffedd5);
       this.dirLight.intensity = 1.3;
-      this.playerGroup.position.set(0, -2.2, 8);
+      const spawnY = WorldBuilder.getTerrainHeight('territory', 0, 8);
+      this.playerState.position = { x: 0, y: spawnY, z: 8 };
+      this.playerGroup.position.set(0, spawnY, 8);
       this.preyManager.initPrey(14);
     } else if (realm === 'moonpool') {
       this.scene.background = new THREE.Color(0x020617);
       this.scene.fog = new THREE.FogExp2(0x0f172a, 0.015);
       this.hemiLight.intensity = 0.3;
       this.dirLight.intensity = 0.4;
-      this.playerGroup.position.set(0, 0.2, 12);
+      const spawnY = WorldBuilder.getTerrainHeight('moonpool', 0, 12);
+      this.playerState.position = { x: 0, y: spawnY, z: 12 };
+      this.playerGroup.position.set(0, spawnY, 12);
       this.preyManager.clearAll();
       soundEngine.playStarClanChime();
     } else if (realm === 'starclan') {
@@ -193,6 +197,7 @@ export class GameEngine3D {
       this.hemiLight.intensity = 0.9;
       this.dirLight.color.setHex(0x93c5fd);
       this.dirLight.intensity = 1.0;
+      this.playerState.position = { x: 0, y: 0.2, z: 8 };
       this.playerGroup.position.set(0, 0.2, 8);
       this.preyManager.clearAll();
       soundEngine.playStarClanChime();
@@ -203,10 +208,96 @@ export class GameEngine3D {
       this.hemiLight.intensity = 0.4;
       this.dirLight.color.setHex(0xdc2626);
       this.dirLight.intensity = 0.5;
+      this.playerState.position = { x: 0, y: 0.2, z: 8 };
       this.playerGroup.position.set(0, 0.2, 8);
       this.preyManager.clearAll();
       soundEngine.playDarkForestWhisper();
     }
+
+    if (this.onStateChange) {
+      this.onStateChange({ ...this.playerState });
+    }
+  }
+
+  public switchRealm(realm: RealmId) {
+    this.loadRealm(realm);
+  }
+
+  public teleport(x: number, z: number) {
+    this.playerState.position.x = x;
+    this.playerState.position.z = z;
+    this.playerState.position.y = WorldBuilder.getTerrainHeight(this.playerState.currentRealm, x, z);
+    this.playerGroup.position.set(this.playerState.position.x, this.playerState.position.y, this.playerState.position.z);
+    this.playerState.velocity = { x: 0, y: 0, z: 0 };
+    if (this.onStateChange) this.onStateChange({ ...this.playerState });
+  }
+
+  public resurrect() {
+    this.playerState.isDead = false;
+    this.playerState.health = this.playerState.maxHealth;
+    this.playerState.stamina = this.playerState.maxStamina;
+    this.playerState.injuries = [];
+    this.playerAnimator.setState('idle');
+    if (this.playerState.currentRealm === 'territory') {
+      const clan = this.playerState.character.clan;
+      if (clan === 'ThunderClan' || clan === 'ThunderOak') {
+        this.teleport(-65, -25);
+      } else if (clan === 'RiverClan' || clan === 'RiverMist') {
+        this.teleport(65, 25);
+      } else {
+        this.teleport(0, 8);
+      }
+    } else {
+      this.teleport(0, 6);
+    }
+    soundEngine.playPurr();
+    if (this.onStateChange) this.onStateChange({ ...this.playerState });
+  }
+
+  public attack(type: 'claw_swipe' | 'pounce' | 'bite') {
+    this.triggerAttack(type);
+  }
+
+  public pounce() {
+    this.triggerPounce();
+  }
+
+  public eatCarriedPrey() {
+    this.eatPrey();
+  }
+
+  public depositPrey() {
+    this.depositPreyToCamp();
+  }
+
+  public playEmote(emote: AnimationState) {
+    this.triggerEmote(emote);
+  }
+
+  public applyHerb(herb: HerbType) {
+    const injIdx = this.playerState.injuries.findIndex((i) => i.curedByHerb === herb);
+    if (injIdx >= 0) {
+      this.playerState.injuries.splice(injIdx, 1);
+    }
+    const herbObj = this.playerState.herbs.find((h) => h.type === herb);
+    if (herbObj && herbObj.quantity > 0) {
+      herbObj.quantity -= 1;
+      if (herbObj.quantity <= 0) {
+        this.playerState.herbs = this.playerState.herbs.filter((h) => h.quantity > 0);
+      }
+    }
+    this.playerState.health = Math.min(this.playerState.maxHealth, this.playerState.health + 25);
+    soundEngine.playPurr();
+    if (this.onStateChange) this.onStateChange({ ...this.playerState });
+  }
+
+  public broadcastChat(msg: ChatMessage) {
+    this.networkEngine.sendChatMessage(msg);
+  }
+
+  public updateCharacter(newChar: PlayerCharacter) {
+    this.playerState.character = newChar;
+    this.updateAppearance(newChar.appearance);
   }
 
   public updateAppearance(appearance: CatAppearance) {
@@ -218,6 +309,9 @@ export class GameEngine3D {
     this.playerGroup.position.set(this.playerState.position.x, this.playerState.position.y, this.playerState.position.z);
     this.scene.add(this.playerGroup);
     this.playerState.character.appearance = appearance;
+    if (this.onStateChange) {
+      this.onStateChange({ ...this.playerState });
+    }
   }
 
   // ==========================================
@@ -225,8 +319,8 @@ export class GameEngine3D {
   // ==========================================
   private bindEvents() {
     window.addEventListener('keydown', (e) => {
-      // Don't capture when typing in chat
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      // Don't capture when typing in chat or modals
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA' || document.activeElement?.tagName === 'SELECT') return;
 
       this.keys[e.code] = true;
 
@@ -238,6 +332,20 @@ export class GameEngine3D {
         this.triggerAttack('claw_swipe');
       } else if (e.code === 'KeyR') {
         this.triggerAttack('bite');
+      } else if (e.code === 'KeyT') {
+        this.triggerEmote('lay_down');
+      } else if (e.code === 'KeyG') {
+        this.triggerEmote('groom');
+      } else if (e.code === 'KeyH') {
+        this.triggerEmote('hiss');
+      } else if (e.code === 'KeyJ') {
+        this.triggerEmote('snarl');
+      } else if (e.code === 'KeyB') {
+        this.triggerEmote('bow');
+      } else if (e.code === 'KeyN') {
+        this.triggerEmote('sleep');
+      } else if (e.code === 'KeyK') {
+        this.triggerEmote('pounce_windup');
       }
     });
 
@@ -522,8 +630,15 @@ export class GameEngine3D {
     this.playerState.position.x = Math.max(-95, Math.min(95, this.playerState.position.x));
     this.playerState.position.z = Math.max(-95, Math.min(95, this.playerState.position.z));
 
-    this.playerGroup.position.x = this.playerState.position.x;
-    this.playerGroup.position.z = this.playerState.position.z;
+    // Dynamic Terrain Height Physics & Surface Snapping
+    const targetGroundY = WorldBuilder.getTerrainHeight(this.playerState.currentRealm, this.playerState.position.x, this.playerState.position.z);
+    this.playerState.position.y += (targetGroundY - this.playerState.position.y) * Math.min(1.0, 18.0 * delta);
+
+    this.playerGroup.position.set(
+      this.playerState.position.x,
+      this.playerState.position.y,
+      this.playerState.position.z
+    );
   }
 
   private updateCamera() {

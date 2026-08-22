@@ -39,6 +39,7 @@ export default function App() {
   const [interactPrompt, setInteractPrompt] = useState<{ text: string; action: () => void } | null>(null);
 
   // Modal Open States
+  const [isCharacterEditorOpen, setIsCharacterEditorOpen] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isStarMapOpen, setIsStarMapOpen] = useState(false);
   const [isEmoteWheelOpen, setIsEmoteWheelOpen] = useState(false);
@@ -142,6 +143,8 @@ export default function App() {
 
       if (e.key === 'm' || e.key === 'M') {
         setIsMapOpen((prev) => !prev);
+      } else if (e.key === 'p' || e.key === 'P') {
+        setIsCharacterEditorOpen((prev) => !prev);
       } else if (e.key === 'e' || e.key === 'E') {
         // If interaction prompt exists, perform it, else open emote wheel
         if (interactPrompt) {
@@ -158,6 +161,7 @@ export default function App() {
       } else if (e.key === 'r' || e.key === 'R') {
         engineRef.current?.attack('bite');
       } else if (e.key === 'Escape') {
+        setIsCharacterEditorOpen(false);
         setIsMapOpen(false);
         setIsStarMapOpen(false);
         setIsEmoteWheelOpen(false);
@@ -241,6 +245,7 @@ export default function App() {
         <HUD
           playerState={playerState}
           interactPrompt={interactPrompt}
+          onOpenCharacter={() => setIsCharacterEditorOpen(true)}
           onOpenMap={() => setIsMapOpen(true)}
           onOpenStarMap={() => setIsStarMapOpen(true)}
           onOpenEmotes={() => setIsEmoteWheelOpen(true)}
@@ -269,6 +274,21 @@ export default function App() {
       />
 
       {/* ================= MODALS & POPUPS ================= */}
+
+      {/* IN-GAME FULL CHARACTER CUSTOMIZATION & BIO SUITE */}
+      {isCharacterEditorOpen && character && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/90 backdrop-blur-md">
+          <CharacterCreator
+            initialCharacter={character}
+            onComplete={(updated) => {
+              setCharacter(updated);
+              engineRef.current?.updateCharacter(updated);
+              setIsCharacterEditorOpen(false);
+            }}
+            onCancel={() => setIsCharacterEditorOpen(false)}
+          />
+        </div>
+      )}
 
       {/* WORLD TACTICAL MAP */}
       {isMapOpen && playerState && (

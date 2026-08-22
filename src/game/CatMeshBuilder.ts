@@ -824,26 +824,73 @@ export class CatMeshBuilder {
     // ==========================================
     // 9. SCARS
     // ==========================================
-    if (appearance.scar === 'torn_left_ear') {
-      leftEarMesh.scale.set(0.75, 0.6, 0.9);
-      leftEarMesh.position.y = earHeight * 0.25;
-    } else if (appearance.scar === 'torn_right_ear') {
-      rightEarMesh.scale.set(0.75, 0.6, 0.9);
-      rightEarMesh.position.y = earHeight * 0.25;
-    } else if (appearance.scar === 'muzzle_scratch') {
-      const scarGeo = new THREE.BoxGeometry(0.01, 0.08, 0.02);
-      const scarMat = new THREE.MeshBasicMaterial({ color: 0x991b1b });
+    const scarMat = new THREE.MeshBasicMaterial({ color: 0x991b1b });
+
+    if (appearance.scar === 'torn_left_ear' || appearance.scar === 'battle_worn_all') {
+      leftEarMesh.scale.set(0.7, 0.55, 0.9);
+      leftEarMesh.position.y = earHeight * 0.22;
+      const notch = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.05, 3), scarMat);
+      notch.position.set(-0.02, earHeight * 0.45, 0);
+      leftEarGroup.add(notch);
+    }
+    if (appearance.scar === 'torn_right_ear' || appearance.scar === 'battle_worn_all') {
+      rightEarMesh.scale.set(0.7, 0.55, 0.9);
+      rightEarMesh.position.y = earHeight * 0.22;
+      const notch = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.05, 3), scarMat);
+      notch.position.set(0.02, earHeight * 0.45, 0);
+      rightEarGroup.add(notch);
+    }
+    if (appearance.scar === 'muzzle_scratch' || appearance.scar === 'battle_worn_all') {
+      const scarGeo = new THREE.BoxGeometry(0.012, 0.09, 0.02);
       const scar = new THREE.Mesh(scarGeo, scarMat);
       scar.position.set(0.04, -0.01, 0.14 + snoutLength * 0.5);
       scar.rotation.z = 0.4;
       headGroup.add(scar);
-    } else if (appearance.scar === 'shoulder_claw_marks') {
-      const scarMat = new THREE.MeshBasicMaterial({ color: 0x991b1b });
+    }
+    if (appearance.scar === 'shoulder_claw_marks' || appearance.scar === 'battle_worn_all') {
       for (let i = 0; i < 3; i++) {
-        const mark = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.12, 0.01), scarMat);
-        mark.position.set(-shoulderWidth * 0.5, 0.05, 0.18 + i * 0.035);
-        mark.rotation.z = -0.3;
+        const mark = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.13, 0.012), scarMat);
+        mark.position.set(-shoulderWidth * 0.52, 0.05, 0.16 + i * 0.038);
+        mark.rotation.z = -0.35;
         bodyGroup.add(mark);
+      }
+    }
+    if (appearance.scar === 'blind_eye_slash' || appearance.scar === 'battle_worn_all') {
+      const slash = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.16, 0.02), scarMat);
+      slash.position.set(0.09, 0.04, 0.14);
+      slash.rotation.z = 0.3;
+      slash.rotation.x = -0.15;
+      headGroup.add(slash);
+    }
+    if (appearance.scar === 'cross_scars') {
+      const slash1 = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.18, 0.014), scarMat);
+      slash1.position.set(0, 0.04, 0.28);
+      slash1.rotation.z = 0.6;
+      bodyGroup.add(slash1);
+      const slash2 = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.18, 0.014), scarMat);
+      slash2.position.set(0, 0.04, 0.28);
+      slash2.rotation.z = -0.6;
+      bodyGroup.add(slash2);
+    }
+    if (appearance.scar === 'chest_scar') {
+      const slash = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.22, 0.014), scarMat);
+      slash.position.set(0.03, 0.02, 0.26);
+      slash.rotation.z = 0.45;
+      bodyGroup.add(slash);
+    }
+    if (appearance.scar === 'flank_scar') {
+      for (let i = 0; i < 3; i++) {
+        const mark = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.14, 0.012), scarMat);
+        mark.position.set(shoulderWidth * 0.52, -0.02, -0.1 + i * 0.04);
+        mark.rotation.z = 0.35;
+        bodyGroup.add(mark);
+      }
+    }
+    if (appearance.scar === 'tail_nick' || appearance.scar === 'battle_worn_all') {
+      if (tailJoints.length > 3) {
+        const nick = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.06, 3), scarMat);
+        nick.position.set(0.03, 0.05, 0);
+        tailJoints[tailJoints.length - 2].add(nick);
       }
     }
 

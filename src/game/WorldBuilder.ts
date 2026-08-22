@@ -70,6 +70,59 @@ export class WorldBuilder {
     };
   }
 
+  /**
+   * Evaluates terrain elevation at any 2D coordinate for accurate physics and foot grounding.
+   */
+  public static getTerrainHeight(realm: RealmId, x: number, z: number): number {
+    if (realm === 'territory') {
+      let y = Math.sin(x * 0.04) * Math.cos(z * 0.04) * 2.0;
+
+      // ThunderClan Ravine Camp (around x: -65, z: -25)
+      const distTC = Math.hypot(x - (-65), z - (-25));
+      if (distTC < 40) {
+        y -= (1.0 - distTC / 40) * 3.8;
+      }
+
+      // RiverClan Island Camp (around x: 65, z: 25)
+      const distRC = Math.hypot(x - 65, z - 25);
+      if (distRC < 35) {
+        y -= (1.0 - distRC / 35) * 1.5;
+      }
+
+      // Winding River Channel running diagonally through center
+      const riverCenterX = Math.sin(z * 0.03) * 22;
+      const distToRiver = Math.abs(x - riverCenterX);
+      if (distToRiver < 18) {
+        y -= Math.cos((distToRiver / 18) * (Math.PI / 2)) * 3.2;
+      }
+
+      // Sunningrocks Cliff (x: -18 to 2, z: -15 to 20)
+      if (x > -18 && x < 2 && z > -15 && z < 20) {
+        y += 2.8;
+      }
+
+      // Outer boundary mountain ridge
+      const maxCoord = Math.max(Math.abs(x), Math.abs(z));
+      if (maxCoord > 130) {
+        y += Math.pow((maxCoord - 130) * 0.5, 1.7);
+      }
+
+      return y;
+    } else if (realm === 'moonpool') {
+      // Moonpool basin
+      const distCenter = Math.hypot(x, z);
+      if (distCenter < 10) {
+        return 0.05;
+      }
+      return 0.2;
+    } else if (realm === 'starclan') {
+      return 0.0;
+    } else if (realm === 'darkforest') {
+      return 0.0;
+    }
+    return 0.0;
+  }
+
   public static updateFreshKillPileCount(worldObjects: WorldObjects, count: number) {
     if (!worldObjects.freshKillMeshGroup) return;
     const group = worldObjects.freshKillMeshGroup;

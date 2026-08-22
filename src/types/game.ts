@@ -76,7 +76,10 @@ export type ScarType =
   | 'shoulder_claw_marks'
   | 'blind_eye_slash'
   | 'tail_nick'
-  | 'cross_scars';
+  | 'cross_scars'
+  | 'chest_scar'
+  | 'flank_scar'
+  | 'battle_worn_all';
 
 export type AuraType =
   | 'none'
@@ -195,6 +198,7 @@ export interface PlayerCharacter {
   suffix: string;
   clan: ClanId;
   role: ClanRole;
+  bio?: string;
   appearance: CatAppearance;
   reputation: number;
   leaderLives: number; // 0 to 9
