@@ -637,20 +637,22 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
           {activeTab === 'body' && (
             <div className="space-y-5">
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Body Frame & Build</label>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Body Frame & Archetype</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'adult', label: 'Balanced' },
+                    { id: 'adult', label: 'Normal Warrior' },
+                    { id: 'large_warrior', label: 'Large Warrior (Broad & Tall)' },
                     { id: 'slender_hunter', label: 'Slender Hunter' },
-                    { id: 'large_warrior', label: 'Heavy Brute' },
+                    { id: 'apprentice', label: 'Apprentice Frame' },
+                    { id: 'kit', label: 'Kit Body' },
                   ].map((bt) => (
                     <button
                       key={bt.id}
                       onClick={() => setAppearance({ ...appearance, bodyType: bt.id as any })}
                       className={`p-2.5 rounded-xl border text-xs font-bold text-center transition ${
                         appearance.bodyType === bt.id
-                          ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-400'
+                          ? 'bg-amber-950/60 border-amber-400 text-amber-200 shadow-md ring-1 ring-amber-400'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
                       }`}
                     >
                       {bt.label}
@@ -660,21 +662,21 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
               </div>
 
               <div>
-                <label className="text-xs font-bold text-stone-300 block mb-2">Fur Style & Fluffiness</label>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Fur Style & 3D Silhouette</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'short_smooth', label: 'Sleek Short-Hair' },
+                    { id: 'short', label: 'Sleek Short-Hair' },
                     { id: 'medium', label: 'Classic Forest Fur' },
-                    { id: 'fluffy', label: 'Fluffy Thick Coat' },
-                    { id: 'very_fluffy', label: 'Longhair Mane (Fluffiest)' },
+                    { id: 'long', label: 'Longhair Coat (Fluffy Tufts)' },
+                    { id: 'fluffy', label: 'Thick Mane (Lion-Ruff Fluff)' },
                   ].map((fs) => (
                     <button
                       key={fs.id}
                       onClick={() => setAppearance({ ...appearance, furStyle: fs.id as any })}
                       className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
-                        appearance.furStyle === fs.id
-                          ? 'bg-amber-950/60 border-amber-400 text-amber-200'
-                          : 'bg-stone-950/40 border-stone-800 text-stone-400'
+                        appearance.furStyle === fs.id || (fs.id === 'short' && appearance.furStyle === 'short_smooth') || (fs.id === 'fluffy' && appearance.furStyle === 'very_fluffy')
+                          ? 'bg-amber-950/60 border-amber-400 text-amber-200 shadow-md ring-1 ring-amber-400'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
                       }`}
                     >
                       {fs.label}
@@ -685,7 +687,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
 
               <div>
                 <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
-                  <span>Overall Size & Stature</span>
+                  <span>Overall Scale Multiplier</span>
                   <span className="text-amber-400">{Math.round((appearance.bodyScale || 1.0) * 100)}%</span>
                 </div>
                 <input
@@ -698,9 +700,9 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
                   className="w-full accent-amber-500"
                 />
                 <div className="flex justify-between text-[10px] text-stone-500 mt-1">
-                  <span>Kit / Apprentice</span>
-                  <span>Average Warrior</span>
-                  <span>Giant Brute</span>
+                  <span>Compact</span>
+                  <span>Standard</span>
+                  <span>Towering</span>
                 </div>
               </div>
             </div>
@@ -891,11 +893,60 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
                 </div>
               </div>
 
-              {/* Muzzle & Ears Sliders */}
+              {/* Muzzle Variants & Ears */}
               <div className="space-y-4 pt-2 border-t border-stone-800">
                 <div>
+                  <label className="text-xs font-bold text-stone-300 block mb-2">Muzzle Profile Variant</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'classic', label: 'Classic Snout' },
+                      { id: 'short_snub', label: 'Snub / Flat Profile' },
+                      { id: 'long_angular', label: 'Long / Sharp Angular' },
+                      { id: 'broad_tom', label: 'Broad Tom Muzzle' },
+                    ].map((mz) => (
+                      <button
+                        key={mz.id}
+                        onClick={() => setAppearance({ ...appearance, muzzleShape: mz.id as any })}
+                        className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
+                          appearance.muzzleShape === mz.id || (!appearance.muzzleShape && mz.id === 'classic')
+                            ? 'bg-amber-950/60 border-amber-400 text-amber-200 shadow-md ring-1 ring-amber-400'
+                            : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
+                        }`}
+                      >
+                        {mz.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-stone-300 block mb-2">Ear Shape Style</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'pricked', label: 'Alert Pricked' },
+                      { id: 'lynx_tufted', label: 'Lynx Tufted' },
+                      { id: 'rounded', label: 'Curved Round' },
+                      { id: 'folded', label: 'Folded Down' },
+                      { id: 'torn_notched', label: 'Battle Notched' },
+                    ].map((es) => (
+                      <button
+                        key={es.id}
+                        onClick={() => setAppearance({ ...appearance, earShape: es.id as any })}
+                        className={`p-2.5 rounded-xl border text-xs font-bold text-center transition ${
+                          appearance.earShape === es.id || (!appearance.earShape && es.id === 'pricked')
+                            ? 'bg-amber-950/60 border-amber-400 text-amber-200 shadow-md ring-1 ring-amber-400'
+                            : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
+                        }`}
+                      >
+                        {es.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
                   <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
-                    <span>Muzzle Length</span>
+                    <span>Muzzle Length Slider</span>
                     <span className="text-amber-400">{Math.round((appearance.muzzleLength || 1.0) * 100)}%</span>
                   </div>
                   <input
@@ -911,7 +962,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
 
                 <div>
                   <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
-                    <span>Ear Size</span>
+                    <span>Ear Size Slider</span>
                     <span className="text-amber-400">{Math.round((appearance.earSize || 1.0) * 100)}%</span>
                   </div>
                   <input
@@ -926,7 +977,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between p-3 bg-stone-950/40 rounded-xl border border-stone-800">
-                  <span className="text-xs font-bold text-stone-300">Lynx Ear Tufts</span>
+                  <span className="text-xs font-bold text-stone-300">Lynx Ear Tips Fluff</span>
                   <input
                     type="checkbox"
                     checked={appearance.earTufts}
@@ -941,6 +992,30 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
           {/* TAB 5: TAIL & PAWS */}
           {activeTab === 'tail_paws' && (
             <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-stone-300 block mb-2">Tail Silhouette & Style</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'sleek', label: 'Classic Sleek' },
+                    { id: 'bushy_plume', label: 'Bushy Plume' },
+                    { id: 'bobtail', label: 'Bobtail' },
+                    { id: 'crooked', label: 'Crooked / Bent' },
+                    { id: 'stumpy', label: 'Stumpy Nub' },
+                  ].map((tt) => (
+                    <button
+                      key={tt.id}
+                      onClick={() => setAppearance({ ...appearance, tailType: tt.id as any })}
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-center transition ${
+                        appearance.tailType === tt.id || (!appearance.tailType && tt.id === 'sleek')
+                          ? 'bg-amber-950/60 border-amber-400 text-amber-200 shadow-md ring-1 ring-amber-400'
+                          : 'bg-stone-950/40 border-stone-800 text-stone-400 hover:border-stone-700'
+                      }`}
+                    >
+                      {tt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div>
                 <div className="flex justify-between text-xs font-bold text-stone-300 mb-1.5">
                   <span>Tail Length</span>
