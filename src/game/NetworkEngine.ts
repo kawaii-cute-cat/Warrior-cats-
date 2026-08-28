@@ -105,7 +105,6 @@ export class NetworkEngine {
   }
 
   public sendChatMessage(msg: ChatMessage) {
-    if (this.onChatMessageCallback) this.onChatMessageCallback(msg);
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     this.ws.send(
       JSON.stringify({
@@ -148,8 +147,11 @@ export class NetworkEngine {
     } else if (packet.type === 'player_left') {
       this.removeRemotePlayer(packet.id);
     } else if (packet.type === 'chat_broadcast') {
-      if (this.onChatMessageCallback) {
-        this.onChatMessageCallback(packet.message);
+      // Ignore broadcast if it came from our own local player (already rendered in UI)
+      if (packet.message.senderId !== this.myPlayerId) {
+        if (this.onChatMessageCallback) {
+          this.onChatMessageCallback(packet.message);
+        }
       }
       // Show speech bubble over sender head
       const sender = this.remotePlayers.get(packet.message.senderId);

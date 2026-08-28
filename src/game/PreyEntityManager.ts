@@ -120,6 +120,26 @@ export class PreyEntityManager {
   }
 
   /**
+   * Finds the closest uncaught live prey within a maximum distance
+   */
+  public getClosestLivePrey(playerPos: THREE.Vector3, maxDist: number = 4.5): { entity: PreyEntity; distance: number } | null {
+    let closest: { entity: PreyEntity; distance: number } | null = null;
+
+    for (const item of this.preyList) {
+      if (item.entity.state === 'caught') continue;
+      const pPos = new THREE.Vector3(item.entity.position.x, item.entity.position.y, item.entity.position.z);
+      const dist = pPos.distanceTo(playerPos);
+      if (dist <= maxDist) {
+        if (!closest || dist < closest.distance) {
+          closest = { entity: item.entity, distance: dist };
+        }
+      }
+    }
+
+    return closest;
+  }
+
+  /**
    * Attempts to catch nearby prey when player pounces or attacks
    */
   public attemptCatch(playerPos: THREE.Vector3, isPouncing: boolean, isSneaking: boolean): PreyItem | null {

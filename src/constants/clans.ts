@@ -1,6 +1,87 @@
 import { ClanDetails, ClanId, CatAppearance, HerbItem, Prophecy } from '../types/game';
 
-export const CLAN_LORE: Record<string, ClanDetails> = {
+export interface ClanColorConfig {
+  hex: string;
+  tailwindText: string;
+  tailwindBorder: string;
+  tailwindBg: string;
+}
+
+export const CLAN_COLORS: Record<string, ClanColorConfig> = {
+  ThunderClan: {
+    hex: '#f59e0b',
+    tailwindText: 'text-amber-400',
+    tailwindBorder: 'border-amber-500',
+    tailwindBg: 'bg-amber-950/80',
+  },
+  ThunderOak: {
+    hex: '#f59e0b',
+    tailwindText: 'text-amber-400',
+    tailwindBorder: 'border-amber-500',
+    tailwindBg: 'bg-amber-950/80',
+  },
+  RiverClan: {
+    hex: '#06b6d4',
+    tailwindText: 'text-cyan-400',
+    tailwindBorder: 'border-cyan-500',
+    tailwindBg: 'bg-cyan-950/80',
+  },
+  RiverMist: {
+    hex: '#06b6d4',
+    tailwindText: 'text-cyan-400',
+    tailwindBorder: 'border-cyan-500',
+    tailwindBg: 'bg-cyan-950/80',
+  },
+  ShadowClan: {
+    hex: '#c084fc',
+    tailwindText: 'text-purple-400',
+    tailwindBorder: 'border-purple-500',
+    tailwindBg: 'bg-purple-950/80',
+  },
+  ShadowPines: {
+    hex: '#c084fc',
+    tailwindText: 'text-purple-400',
+    tailwindBorder: 'border-purple-500',
+    tailwindBg: 'bg-purple-950/80',
+  },
+  WindClan: {
+    hex: '#34d399',
+    tailwindText: 'text-emerald-400',
+    tailwindBorder: 'border-emerald-500',
+    tailwindBg: 'bg-emerald-950/80',
+  },
+  WindBreeze: {
+    hex: '#34d399',
+    tailwindText: 'text-emerald-400',
+    tailwindBorder: 'border-emerald-500',
+    tailwindBg: 'bg-emerald-950/80',
+  },
+  Loner: {
+    hex: '#94a3b8',
+    tailwindText: 'text-slate-400',
+    tailwindBorder: 'border-slate-500',
+    tailwindBg: 'bg-slate-900/80',
+  },
+  StarClan: {
+    hex: '#7dd3fc',
+    tailwindText: 'text-sky-300',
+    tailwindBorder: 'border-sky-400',
+    tailwindBg: 'bg-sky-950/80',
+  },
+  DarkForest: {
+    hex: '#fb7185',
+    tailwindText: 'text-rose-400',
+    tailwindBorder: 'border-rose-500',
+    tailwindBg: 'bg-rose-950/80',
+  },
+};
+
+export function getClanColor(clan?: string): ClanColorConfig {
+  if (!clan) return CLAN_COLORS.ThunderClan;
+  return CLAN_COLORS[clan] || CLAN_COLORS.ThunderClan;
+}
+
+export const CLAN_DETAILS: Record<ClanId, ClanDetails> = {
   ThunderClan: {
     id: 'ThunderClan' as ClanId,
     name: 'ThunderClan',
@@ -120,6 +201,8 @@ export const CLAN_LORE: Record<string, ClanDetails> = {
     freshKillCount: 20,
   },
 };
+
+export const CLAN_LORE = CLAN_DETAILS;
 
 export const DEFAULT_APPEARANCE: CatAppearance = {
   bodyType: 'adult',

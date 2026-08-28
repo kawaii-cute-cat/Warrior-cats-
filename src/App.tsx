@@ -26,7 +26,7 @@ import { DarkForestTrialModal } from './components/DarkForestTrialModal';
 import { ClanChangeModal } from './components/ClanChangeModal';
 import { DeathRealmModal } from './components/DeathRealmModal';
 import { SettingsModal } from './components/SettingsModal';
-import { SpeechBubbleOverlay, WorldSpeechBubble } from './components/SpeechBubbleOverlay';
+import { SpeechBubbleOverlay, WorldSpeechBubble, WorldNameplate } from './components/SpeechBubbleOverlay';
 import { soundEngine } from './audio/SoundEngine';
 
 export default function App() {
@@ -38,6 +38,7 @@ export default function App() {
   const [playerState, setPlayerState] = useState<PlayerRuntimeState | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [speechBubbles, setSpeechBubbles] = useState<WorldSpeechBubble[]>([]);
+  const [nameplates, setNameplates] = useState<WorldNameplate[]>([]);
   const [activeWaypoint, setActiveWaypoint] = useState<{ name: string; x: number; z: number } | null>(null);
   const [interactPrompt, setInteractPrompt] = useState<{ text: string; action: () => void } | null>(null);
 
@@ -69,10 +70,13 @@ export default function App() {
           setInteractPrompt(prompt);
         },
         onChatMessage: (msg) => {
-          setChatMessages((prev) => [...prev.slice(-100), msg]);
+          setChatMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev.slice(-100), msg]));
         },
         onSpeechBubblesUpdate: (bubbles) => {
           setSpeechBubbles(bubbles);
+        },
+        onNameplatesUpdate: (plates) => {
+          setNameplates(plates);
         },
         onWaypointUpdate: (wp) => {
           if (wp) {
@@ -146,7 +150,7 @@ export default function App() {
     };
   }, [character]);
 
-  // Global Keyboard Shortcuts
+  // Global Keyboard Shortcuts for UI and Modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger shortcuts if typing inside an input/textarea
@@ -165,26 +169,6 @@ export default function App() {
         } else {
           setIsEmoteWheelOpen((prev) => !prev);
         }
-      } else if (e.key === 'c' || e.key === 'C') {
-        engineRef.current?.toggleSneak();
-      } else if (e.key === 'v' || e.key === 'V') {
-        engineRef.current?.toggleScentSense();
-      } else if (e.key === 'f' || e.key === 'F') {
-        engineRef.current?.attack('claw_swipe');
-      } else if (e.key === 'r' || e.key === 'R') {
-        engineRef.current?.playEmote('sit');
-      } else if (e.key === 't' || e.key === 'T') {
-        engineRef.current?.playEmote('lay_down');
-      } else if (e.key === 'g' || e.key === 'G') {
-        engineRef.current?.playEmote('groom');
-      } else if (e.key === 'h' || e.key === 'H') {
-        engineRef.current?.playEmote('hiss');
-      } else if (e.key === 'j' || e.key === 'J') {
-        engineRef.current?.playEmote('snarl');
-      } else if (e.key === 'b' || e.key === 'B') {
-        engineRef.current?.playEmote('bow');
-      } else if (e.key === 'n' || e.key === 'N') {
-        engineRef.current?.playEmote('sleep');
       } else if (e.key === 'Escape') {
         setIsCharacterEditorOpen(false);
         setIsMapOpen(false);
@@ -265,8 +249,8 @@ export default function App() {
       {/* 3D WEBGL CANVAS VIEWPORT */}
       <div ref={canvasContainerRef} className="absolute inset-0 w-full h-full cursor-crosshair" />
 
-      {/* WORLD-SPACE 3D SPEECH BUBBLE BILLBOARDS */}
-      <SpeechBubbleOverlay bubbles={speechBubbles} />
+      {/* WORLD-SPACE 3D SPEECH BUBBLE & NAMEPLATE BILLBOARDS */}
+      <SpeechBubbleOverlay bubbles={speechBubbles} nameplates={nameplates} />
 
       {/* IN-GAME HEADS-UP DISPLAY (HUD) */}
       {playerState && (
@@ -296,7 +280,7 @@ export default function App() {
         myRole={character.role}
         messages={chatMessages}
         onSendMessage={(msg) => {
-          setChatMessages((prev) => [...prev.slice(-100), msg]);
+          setChatMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev.slice(-100), msg]));
           engineRef.current?.broadcastChat(msg);
         }}
       />

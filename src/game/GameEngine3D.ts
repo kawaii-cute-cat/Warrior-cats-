@@ -8,7 +8,7 @@ import { NetworkEngine } from './NetworkEngine';
 import { CombatAndMedicineSystem } from './CombatAndMedicineSystem';
 import { LeaderNineLivesSystem } from './LeaderNineLivesSystem';
 import { soundEngine } from '../audio/SoundEngine';
-import { WorldSpeechBubble } from '../components/SpeechBubbleOverlay';
+import { WorldSpeechBubble, WorldNameplate } from '../components/SpeechBubbleOverlay';
 
 export interface ActiveSpeechBubbleData {
   id: string;
@@ -34,6 +34,12 @@ export class GameEngine3D {
   private playerRig: CatRigNodes;
   private playerAnimator: CatAnimationController;
 
+  // Pounce physical trajectory state
+  private isPouncing = false;
+  private pounceTimer = 0;
+  private pounceDuration = 0.55;
+  private pounceVelocity = new THREE.Vector3();
+
   // World & Systems
   private worldObjects: WorldObjects | null = null;
   private preyManager: PreyEntityManager;
@@ -42,7 +48,7 @@ export class GameEngine3D {
   // Navigation Waypoint
   private activeWaypoint: { name: string; x: number; z: number } | null = null;
 
-  // Speech Bubbles System
+  // Speech Bubbles & Nameplates System
   private activeBubbles: Map<string, ActiveSpeechBubbleData> = new Map();
 
   // Camera parameters
@@ -70,6 +76,7 @@ export class GameEngine3D {
   private onPlayerDied?: () => void;
   private onChatMessage?: (msg: ChatMessage) => void;
   private onSpeechBubblesUpdate?: (bubbles: WorldSpeechBubble[]) => void;
+  private onNameplatesUpdate?: (nameplates: WorldNameplate[]) => void;
   private onWaypointUpdate?: (waypoint: { name: string; x: number; z: number; distance: number } | null) => void;
 
   constructor(
@@ -87,6 +94,7 @@ export class GameEngine3D {
       onPlayerDied?: () => void;
       onChatMessage?: (msg: ChatMessage) => void;
       onSpeechBubblesUpdate?: (bubbles: WorldSpeechBubble[]) => void;
+      onNameplatesUpdate?: (nameplates: WorldNameplate[]) => void;
       onWaypointUpdate?: (waypoint: { name: string; x: number; z: number; distance: number } | null) => void;
     }
   ) {
@@ -376,7 +384,10 @@ export class GameEngine3D {
 
       this.keys[e.code] = true;
 
-      if (e.code === 'KeyC') {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        this.triggerPounce();
+      } else if (e.code === 'KeyC') {
         this.toggleSneak();
       } else if (e.code === 'KeyV') {
         this.toggleScentSense();
@@ -467,20 +478,27 @@ export class GameEngine3D {
   }
 
   public triggerPounce() {
-    if (this.playerState.stamina < 15) return;
-    this.playerState.stamina -= 15;
-    this.playerAnimator.setState('pounce_leap');
+    if (this.playerState.stamina < 15 || this.isPouncing) return;
+    this.playerState.stamina = Math.max(0, this.playerState.stamina - 15);
     soundEngine.playPounce();
 
-    // Catch prey check
+    // Calculate forward impulse in the exact direction the cat is currently facing
+    const facingYaw = this.playerGroup.rotation.y;
+    const forwardImpulse = 8.8; // Smooth swift leap speed
+    this.pounceVelocity.set(
+      Math.sin(facingYaw) * forwardImpulse,
+      3.6, // Vertical leap boost
+      Math.cos(facingYaw) * forwardImpulse
+    );
+    this.isPouncing = true;
+    this.pounceTimer = 0;
+    this.playerAnimator.setState('pounce_leap');
+
+    // Immediate initial catch check
     const caught = this.preyManager.attemptCatch(this.playerGroup.position, true, this.playerState.isSneaking);
     if (caught) {
       this.setCarriedPrey(caught);
     }
-
-    setTimeout(() => {
-      this.playerAnimator.setState('idle');
-    }, 600);
   }
 
   public triggerAttack(type: 'claw_swipe' | 'pounce' | 'bite') {
@@ -489,15 +507,33 @@ export class GameEngine3D {
     this.playerState.stamina = Math.max(0, this.playerState.stamina - res.staminaUsed);
     this.playerAnimator.setState(type === 'claw_swipe' ? 'claw_swipe' : (type === 'bite' ? 'bite' : 'pounce_leap'));
 
-    // Check catch if prey nearby
-    const caught = this.preyManager.attemptCatch(this.playerGroup.position, false, this.playerState.isSneaking);
+    // Check hit detection in front of cat (radius 2.5m, within 90-degree frontal cone)
+    const pPos = this.playerGroup.position;
+    const facingYaw = this.playerGroup.rotation.y;
+    const facingDir = new THREE.Vector3(Math.sin(facingYaw), 0, Math.cos(facingYaw)).normalize();
+
+    // 1. Prey hit
+    const caught = this.preyManager.attemptCatch(pPos, type === 'pounce', this.playerState.isSneaking);
     if (caught) {
       this.setCarriedPrey(caught);
     }
 
+    // 2. Sparring dummies or NPCs in Dark Forest
+    if (this.playerState.currentRealm === 'darkforest') {
+      const dummies = [-15, 15];
+      dummies.forEach((dx) => {
+        const dummyPos = new THREE.Vector3(dx, 0.5, 5);
+        if (pPos.distanceTo(dummyPos) < 3.2) {
+          soundEngine.playGrowl();
+        }
+      });
+    }
+
     setTimeout(() => {
-      this.playerAnimator.setState('idle');
-    }, 500);
+      if (!this.isPouncing) {
+        this.playerAnimator.setState(this.playerState.isSneaking ? 'sneak' : 'idle');
+      }
+    }, 450);
   }
 
   public triggerEmote(emote: AnimationState) {
@@ -604,11 +640,79 @@ export class GameEngine3D {
     // Render
     this.renderer.render(this.scene, this.camera);
 
-    // Calculate & Project World-Space Speech Bubbles
+    // Calculate & Project World-Space Speech Bubbles & Identity Nameplates
     const now = Date.now();
     const projectedBubbles: WorldSpeechBubble[] = [];
+    const projectedNameplates: WorldNameplate[] = [];
     const tempVec = new THREE.Vector3();
 
+    // 1. Local Player Overhead Nameplate
+    if (this.playerRig?.headGroup) {
+      const localHeadPos = this.playerRig.headGroup.getWorldPosition(tempVec.clone());
+      const plateAnchor = localHeadPos.clone().add(new THREE.Vector3(0, 0.45, 0));
+      const distToCam = this.camera.position.distanceTo(plateAnchor);
+      const screenVec = plateAnchor.clone().project(this.camera);
+
+      if (screenVec.z < 1.0 && distToCam < 45) {
+        const screenX = (screenVec.x * 0.5 + 0.5) * this.container.clientWidth;
+        const screenY = (-(screenVec.y * 0.5) + 0.5) * this.container.clientHeight;
+
+        projectedNameplates.push({
+          id: `plate_${this.playerState.id}`,
+          name: this.playerState.character.name,
+          clan: this.playerState.character.clan,
+          role: this.playerState.character.role,
+          isLeader: this.playerState.character.role === 'Leader',
+          leaderLives: this.playerState.character.leaderLives,
+          health: this.playerState.health,
+          maxHealth: this.playerState.maxHealth,
+          screenX,
+          screenY,
+          distance: distToCam,
+          visible: true,
+        });
+      }
+    }
+
+    // 2. Remote Players & Simulated Clanmate Nameplates
+    const rpList = this.networkEngine.getRemotePlayers();
+    rpList.forEach((rp) => {
+      if (rp.meshGroup.visible && rp.currentRealm === this.playerState.currentRealm) {
+        let rHeadPos = rp.rig?.headGroup
+          ? rp.rig.headGroup.getWorldPosition(tempVec.clone())
+          : rp.meshGroup.position.clone().add(new THREE.Vector3(0, 0.45, 0));
+
+        const plateAnchor = rHeadPos.clone().add(new THREE.Vector3(0, 0.45, 0));
+        const distToCam = this.camera.position.distanceTo(plateAnchor);
+        const screenVec = plateAnchor.clone().project(this.camera);
+
+        if (screenVec.z < 1.0 && distToCam < 45) {
+          const screenX = (screenVec.x * 0.5 + 0.5) * this.container.clientWidth;
+          const screenY = (-(screenVec.y * 0.5) + 0.5) * this.container.clientHeight;
+
+          projectedNameplates.push({
+            id: `plate_${rp.id}`,
+            name: rp.character.name,
+            clan: rp.character.clan,
+            role: rp.character.role,
+            isLeader: rp.character.role === 'Leader',
+            leaderLives: rp.character.leaderLives,
+            health: rp.health,
+            maxHealth: rp.maxHealth,
+            screenX,
+            screenY,
+            distance: distToCam,
+            visible: true,
+          });
+        }
+      }
+    });
+
+    if (this.onNameplatesUpdate) {
+      this.onNameplatesUpdate(projectedNameplates);
+    }
+
+    // 3. Project Speech Bubbles
     this.activeBubbles.forEach((bubble, key) => {
       if (now > bubble.expiresAt) {
         this.activeBubbles.delete(key);
@@ -626,7 +730,6 @@ export class GameEngine3D {
         }
         speakerRealm = this.playerState.currentRealm;
       } else {
-        const rpList = this.networkEngine.getRemotePlayers();
         const found = rpList.find((p) => p.id === bubble.senderId);
         if (found && found.meshGroup.visible) {
           if (found.rig?.headGroup) {
@@ -695,6 +798,41 @@ export class GameEngine3D {
   };
 
   private handlePlayerMovement(delta: number) {
+    // 1. If currently in mid-air Pounce Leap
+    if (this.isPouncing) {
+      this.pounceTimer += delta;
+      const t = this.pounceTimer / this.pounceDuration;
+
+      // Apply forward velocity impulse
+      this.playerState.position.x += this.pounceVelocity.x * delta;
+      this.playerState.position.z += this.pounceVelocity.z * delta;
+
+      // Ground height + Parabolic leap arc
+      const groundY = WorldBuilder.getTerrainHeight(this.playerState.currentRealm, this.playerState.position.x, this.playerState.position.z);
+      const leapArc = Math.sin(Math.min(Math.PI, t * Math.PI)) * 0.65;
+      this.playerState.position.y = groundY + leapArc;
+
+      // Catch check during flight
+      const caught = this.preyManager.attemptCatch(this.playerGroup.position, true, this.playerState.isSneaking);
+      if (caught) {
+        this.setCarriedPrey(caught);
+      }
+
+      if (this.pounceTimer >= this.pounceDuration) {
+        this.isPouncing = false;
+        this.playerState.position.y = groundY;
+        this.playerAnimator.setState(this.playerState.isSneaking ? 'sneak' : 'idle');
+      }
+
+      this.playerGroup.position.set(
+        this.playerState.position.x,
+        this.playerState.position.y,
+        this.playerState.position.z
+      );
+      return;
+    }
+
+    // 2. Standard Directional Movement (Decoupled from Camera Yaw)
     let moveX = 0;
     let moveZ = 0;
 
@@ -728,15 +866,16 @@ export class GameEngine3D {
     }
 
     if (isMoving) {
-      // Calculate move angle relative to camera yaw
+      // Calculate move angle relative to camera yaw (camera yaw stays completely undisturbed by movement keys)
       const moveAngle = Math.atan2(moveX, moveZ) + this.cameraYaw;
       const vx = Math.sin(moveAngle) * speed;
       const vz = Math.cos(moveAngle) * speed;
 
+      this.playerState.velocity = { x: vx, y: 0, z: vz };
       this.playerState.position.x += vx * delta;
       this.playerState.position.z += vz * delta;
 
-      // Smooth rotate cat to face movement direction
+      // Smooth rotate cat mesh to face movement direction
       let diff = moveAngle - this.playerGroup.rotation.y;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
@@ -757,6 +896,7 @@ export class GameEngine3D {
         soundEngine.playFootstep('grass');
       }
     } else {
+      this.playerState.velocity = { x: 0, y: 0, z: 0 };
       if (this.playerAnimator.getState() === 'walk' || this.playerAnimator.getState() === 'sprint') {
         this.playerAnimator.setState(this.playerState.isSneaking ? 'sneak' : 'idle');
       }
@@ -788,64 +928,78 @@ export class GameEngine3D {
   }
 
   private checkInteractables() {
-    if (!this.worldObjects) return;
     const pPos = this.playerGroup.position;
     let closestPrompt: { text: string; action: () => void } | null = null;
 
-    for (const item of this.worldObjects.interactables) {
-      const dist = pPos.distanceTo(item.position);
-      if (dist <= item.radius) {
-        if (item.type === 'fresh_kill_pile') {
-          if (this.playerState.carriedPrey) {
+    // 1. Check nearby live prey (< 4.5m)
+    const nearbyPrey = this.preyManager.getClosestLivePrey(pPos, 4.5);
+    if (nearbyPrey) {
+      if (!this.playerState.carriedPrey) {
+        const pType = nearbyPrey.entity.type.toUpperCase();
+        closestPrompt = {
+          text: `Press E or Space to Pounce & Catch ${pType} (Hold C to Stalk)`,
+          action: () => this.triggerPounce(),
+        };
+      }
+    }
+
+    // 2. Check world objects & points of interest
+    if (this.worldObjects) {
+      for (const item of this.worldObjects.interactables) {
+        const dist = pPos.distanceTo(item.position);
+        if (dist <= item.radius) {
+          if (item.type === 'fresh_kill_pile') {
+            if (this.playerState.carriedPrey) {
+              closestPrompt = {
+                text: `Press E to Deposit ${this.playerState.carriedPrey.name} into Fresh-Kill Pile (+10 Rep)`,
+                action: () => this.depositPreyToCamp(),
+              };
+            } else {
+              closestPrompt = {
+                text: 'Fresh-Kill Pile (Bring hunted prey here for Clan reputation)',
+                action: () => {},
+              };
+            }
+          } else if (item.type === 'moonpool_altar') {
             closestPrompt = {
-              text: `Press E to Deposit ${this.playerState.carriedPrey.name} into Fresh-Kill Pile`,
-              action: () => this.depositPreyToCamp(),
+              text: 'Press E to Touch Sacred Pool & Commune with StarClan',
+              action: () => {
+                if (this.onProphecyVisionRequested) this.onProphecyVisionRequested();
+              },
             };
-          } else {
+          } else if (item.type === 'starclan_spirit') {
+            const spData = item.data as any;
             closestPrompt = {
-              text: 'Fresh-Kill Pile (Bring hunted prey here for Clan reputation)',
-              action: () => {},
+              text: `Speak with ${spData.name}`,
+              action: () => {
+                if (this.onProphecyVisionRequested) this.onProphecyVisionRequested();
+              },
             };
+          } else if (item.type === 'darkforest_instructor') {
+            closestPrompt = {
+              text: 'Enter Shadow Combat Training Trial',
+              action: () => {
+                if (this.onDarkForestTrialRequested) this.onDarkForestTrialRequested();
+              },
+            };
+          } else if (item.type === 'clan_change_stone') {
+            closestPrompt = {
+              text: 'Press E to Commune at Gathering Stone (Change Clan)',
+              action: () => {
+                if (this.onClanChangeRequested) this.onClanChangeRequested();
+              },
+            };
+          } else if (item.type === 'herb_plant') {
+            const herbNode = this.worldObjects.herbNodes.find((h) => h.id === item.id);
+            if (herbNode && !herbNode.harvested) {
+              closestPrompt = {
+                text: `Press E to Harvest ${(item.data as any).name}`,
+                action: () => this.harvestHerb(herbNode),
+              };
+            }
           }
-        } else if (item.type === 'moonpool_altar') {
-          closestPrompt = {
-            text: 'Press E to Touch Sacred Pool & Commune with StarClan',
-            action: () => {
-              if (this.onProphecyVisionRequested) this.onProphecyVisionRequested();
-            },
-          };
-        } else if (item.type === 'starclan_spirit') {
-          const spData = item.data as any;
-          closestPrompt = {
-            text: `Speak with ${spData.name}`,
-            action: () => {
-              if (this.onProphecyVisionRequested) this.onProphecyVisionRequested();
-            },
-          };
-        } else if (item.type === 'darkforest_instructor') {
-          closestPrompt = {
-            text: 'Enter Shadow Combat Training Trial',
-            action: () => {
-              if (this.onDarkForestTrialRequested) this.onDarkForestTrialRequested();
-            },
-          };
-        } else if (item.type === 'clan_change_stone') {
-          closestPrompt = {
-            text: 'Press E to Commune at Neutral Gathering Stone (Change Clan)',
-            action: () => {
-              if (this.onClanChangeRequested) this.onClanChangeRequested();
-            },
-          };
-        } else if (item.type === 'herb_plant') {
-          const herbNode = this.worldObjects.herbNodes.find((h) => h.id === item.id);
-          if (herbNode && !herbNode.harvested) {
-            closestPrompt = {
-              text: `Press E to Harvest ${(item.data as any).name}`,
-              action: () => this.harvestHerb(herbNode),
-            };
-          }
+          break;
         }
-        break;
       }
     }
 
