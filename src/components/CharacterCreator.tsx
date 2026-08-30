@@ -124,20 +124,23 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
-    const initialW = Math.max(container.clientWidth, 320);
-    const initialH = Math.max(container.clientHeight, 320);
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x18181b);
 
-    const camera = new THREE.PerspectiveCamera(45, initialW / initialH, 0.1, 50);
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 50);
     camera.position.set(0, 0.55, cameraZoom);
     camera.lookAt(0, 0.22, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-    renderer.setSize(initialW, initialH);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
+
+    // Explicitly enforce responsive canvas styling
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+    renderer.domElement.style.display = 'block';
+
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
@@ -177,6 +180,33 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
       rotationY: 0.3,
     };
 
+    // Synchronize viewport dimensions with parent container
+    const updateViewportSize = () => {
+      if (!mountRef.current || !renderer || !camera) return;
+      const width = mountRef.current.clientWidth;
+      const height = mountRef.current.clientHeight;
+      if (width > 0 && height > 0) {
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height, false);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.domElement.style.width = '100%';
+        renderer.domElement.style.height = '100%';
+        renderer.domElement.style.display = 'block';
+      }
+    };
+
+    // Initial measurement pass immediately and deferred across animation frames
+    updateViewportSize();
+    let rAf1: number | null = null;
+    let rAf2: number | null = null;
+    rAf1 = requestAnimationFrame(() => {
+      updateViewportSize();
+      rAf2 = requestAnimationFrame(() => {
+        updateViewportSize();
+      });
+    });
+
     // Build the initial cat mesh immediately
     rebuildCatMesh(appearance, previewAnimation);
 
@@ -201,18 +231,12 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
 
     animate();
 
-    // Use ResizeObserver for accurate sizing on initial mount & layout transitions
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0 && renderer && camera) {
-          camera.aspect = width / height;
-          camera.updateProjectionMatrix();
-          renderer.setSize(width, height);
-        }
-      }
+    // ResizeObserver on the actual canvas container
+    const resizeObserver = new ResizeObserver(() => {
+      updateViewportSize();
     });
     resizeObserver.observe(container);
+    window.addEventListener('resize', updateViewportSize);
 
     // Drag to rotate controls
     const onMouseDown = (e: MouseEvent) => {
@@ -248,10 +272,13 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
 
     return () => {
       resizeObserver.disconnect();
+      window.removeEventListener('resize', updateViewportSize);
       container.removeEventListener('mousedown', onMouseDown);
       container.removeEventListener('wheel', onWheel);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
+      if (rAf1 !== null) cancelAnimationFrame(rAf1);
+      if (rAf2 !== null) cancelAnimationFrame(rAf2);
       if (previewRef.current.animId !== null) {
         cancelAnimationFrame(previewRef.current.animId);
       }
@@ -363,9 +390,9 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col lg:flex-row bg-stone-950 text-stone-100 select-none overflow-hidden">
+    <div className="relative w-full h-full min-h-0 min-w-0 flex flex-col lg:flex-row bg-stone-950 text-stone-100 select-none overflow-hidden">
       {/* ================= LEFT: 3D LIVE TURNTABLE PREVIEW ================= */}
-      <div className="relative flex-1 h-[40vh] lg:h-full bg-gradient-to-b from-stone-900 via-stone-950 to-stone-950 flex flex-col items-center justify-center overflow-hidden border-b lg:border-b-0 lg:border-r border-stone-800">
+      <div className="relative flex-1 min-h-0 min-w-0 h-[45vh] lg:h-full bg-gradient-to-b from-stone-900 via-stone-950 to-stone-950 flex flex-col items-center justify-center overflow-hidden border-b lg:border-b-0 lg:border-r border-stone-800">
         {/* Top Info & Back Button */}
         <div className="absolute top-4 left-4 z-10 flex flex-col">
           <span className="text-[10px] font-black tracking-widest uppercase text-amber-400/90 flex items-center gap-1.5">
@@ -392,7 +419,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
         )}
 
         {/* 3D Canvas Mount Point */}
-        <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+        <div ref={mountRef} className="absolute inset-0 w-full h-full min-h-0 min-w-0 cursor-grab active:cursor-grabbing overflow-hidden" />
 
         {/* Floating Turntable & Animation Controls */}
         <div className="absolute bottom-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
@@ -449,7 +476,7 @@ export const CharacterCreator: React.FC<CharacterCreatorProps> = ({
       </div>
 
       {/* ================= RIGHT: CUSTOMIZATION CONTROLS SUITE ================= */}
-      <div className="w-full lg:w-[480px] h-[60vh] lg:h-full flex flex-col bg-stone-900/95 border-stone-800">
+      <div className="w-full lg:w-[480px] h-[55vh] lg:h-full min-h-0 flex-shrink-0 flex flex-col bg-stone-900/95 border-stone-800">
         {/* Navigation Tabs Header */}
         <div className="p-2 border-b border-stone-800 bg-stone-950/70 overflow-x-auto flex gap-1.5 scrollbar-thin">
           {[

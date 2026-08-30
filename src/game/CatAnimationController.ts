@@ -6,7 +6,10 @@ export class CatAnimationController {
   private rig: CatRigNodes;
   private state: AnimationState = 'idle';
   private animTime: number = 0;
-  private transitionAlpha: number = 1.0;
+
+  // Base resting positions for anatomical joints
+  private readonly defaultNeckPos = new THREE.Vector3(0, 0.05, 0.16);
+  private readonly defaultHeadPos = new THREE.Vector3(0, 0.02, 0.08);
 
   constructor(rig: CatRigNodes) {
     this.rig = rig;
@@ -45,77 +48,93 @@ export class CatAnimationController {
       auraGroup,
     } = this.rig;
 
-    // Reset base rotations for blending
-    const baseBodyY = 0.42;
+    // Strict rule: Head and Neck positions remain locked at their anatomical roots
+    neckGroup.position.copy(this.defaultNeckPos);
+    headGroup.position.copy(this.defaultHeadPos);
+
+    // Reset base body height
+    const baseBodyY = 0.22;
 
     // Animate Aura particles if present
     if (auraGroup && auraGroup.children.length > 0) {
-      auraGroup.rotation.y += delta * 0.5;
+      auraGroup.rotation.y += delta * 0.4;
     }
 
     switch (this.state) {
       case 'idle': {
-        // Subtle breathing
-        body.position.y = baseBodyY + Math.sin(t * 2.2) * 0.015;
+        // Natural gentle feline breathing & posture
+        body.position.y = baseBodyY + Math.sin(t * 2.2) * 0.008;
         body.rotation.set(0, 0, 0);
 
-        neckGroup.rotation.x = Math.sin(t * 1.5) * 0.03;
-        headGroup.rotation.y = Math.sin(t * 0.7) * 0.08;
+        neckGroup.rotation.x = Math.sin(t * 1.4) * 0.02;
+        neckGroup.rotation.y = 0;
+        headGroup.rotation.y = Math.sin(t * 0.7) * 0.06;
         headGroup.rotation.z = Math.sin(t * 0.5) * 0.02;
+        headGroup.rotation.x = 0.02 + Math.sin(t * 1.1) * 0.02;
 
-        // Ear twitches occasionally
-        const earTwitch = Math.sin(t * 5) > 0.96 ? 0.2 : 0;
-        leftEarGroup.rotation.z = 0.35 + earTwitch;
-        rightEarGroup.rotation.z = -0.35 - (Math.sin(t * 4.2) > 0.95 ? 0.18 : 0);
+        // Subtle realistic ear twitches
+        const earTwitch = Math.sin(t * 5.5) > 0.96 ? 0.15 : 0;
+        leftEarGroup.rotation.z = 0.1 + earTwitch;
+        rightEarGroup.rotation.z = -0.1 - (Math.sin(t * 4.1) > 0.95 ? 0.14 : 0);
 
-        // Legs upright
-        leftFrontLeg.rotation.x = 0;
-        leftFrontForearm.rotation.x = 0;
-        rightFrontLeg.rotation.x = 0;
-        rightFrontForearm.rotation.x = 0;
-        leftBackLeg.rotation.x = 0;
-        leftBackShin.rotation.x = 0.2;
-        rightBackLeg.rotation.x = 0;
-        rightBackShin.rotation.x = 0.2;
+        // Legs upright & planted
+        leftFrontLeg.rotation.set(0, 0, 0);
+        leftFrontForearm.rotation.set(0, 0, 0);
+        rightFrontLeg.rotation.set(0, 0, 0);
+        rightFrontForearm.rotation.set(0, 0, 0);
+        leftBackLeg.rotation.set(0, 0, 0);
+        leftBackShin.rotation.set(0.15, 0, 0);
+        rightBackLeg.rotation.set(0, 0, 0);
+        rightBackShin.rotation.set(0.15, 0, 0);
 
-        // Gentle tail swish
+        // Gentle, relaxed feline tail swish (4-joint smooth curve)
         tailJoints.forEach((joint, idx) => {
-          joint.rotation.y = Math.sin(t * 1.8 + idx * 0.4) * 0.15;
-          joint.rotation.x = 0.35 + Math.sin(t * 1.2 + idx * 0.2) * 0.08;
+          joint.rotation.y = Math.sin(t * 1.6 + idx * 0.35) * 0.12;
+          joint.rotation.x = 0.30 + Math.sin(t * 1.0 + idx * 0.2) * 0.06;
+          joint.rotation.z = 0;
         });
 
-        jawGroup.rotation.x = 0;
+        jawGroup.rotation.set(0, 0, 0);
         break;
       }
 
       case 'walk': {
-        const freq = 6.0 * speedRatio;
+        const freq = 6.2 * speedRatio;
         const walkCycle = t * freq;
 
-        body.position.y = baseBodyY + Math.abs(Math.sin(walkCycle)) * 0.03;
-        body.rotation.z = Math.sin(walkCycle) * 0.04;
-        body.rotation.x = Math.sin(walkCycle * 2) * 0.02;
+        // Quadrupedal vertical bounce & hip sway
+        body.position.y = baseBodyY + Math.abs(Math.sin(walkCycle)) * 0.02;
+        body.rotation.z = Math.sin(walkCycle) * 0.035;
+        body.rotation.x = Math.sin(walkCycle * 2) * 0.015;
 
-        headGroup.position.y = 0.14 + Math.sin(walkCycle) * 0.02;
-        headGroup.rotation.x = Math.sin(walkCycle) * 0.04;
+        // Head keeps steady forward gaze through rotational counter-bob
+        neckGroup.rotation.x = 0.04 + Math.sin(walkCycle) * 0.03;
+        neckGroup.rotation.y = 0;
+        headGroup.rotation.x = -Math.sin(walkCycle) * 0.025;
+        headGroup.rotation.y = 0;
+        headGroup.rotation.z = -Math.sin(walkCycle) * 0.02;
 
-        // Feline 4-beat diagonal gait
-        leftFrontLeg.rotation.x = Math.sin(walkCycle) * 0.45;
-        leftFrontForearm.rotation.x = Math.max(0, -Math.sin(walkCycle) * 0.5);
+        // Authentic feline 4-beat diagonal gait
+        leftFrontLeg.rotation.x = Math.sin(walkCycle) * 0.42;
+        leftFrontForearm.rotation.x = Math.max(0, -Math.sin(walkCycle) * 0.45);
 
-        rightFrontLeg.rotation.x = Math.sin(walkCycle + Math.PI) * 0.45;
-        rightFrontForearm.rotation.x = Math.max(0, -Math.sin(walkCycle + Math.PI) * 0.5);
+        rightFrontLeg.rotation.x = Math.sin(walkCycle + Math.PI) * 0.42;
+        rightFrontForearm.rotation.x = Math.max(0, -Math.sin(walkCycle + Math.PI) * 0.45);
 
-        leftBackLeg.rotation.x = Math.sin(walkCycle + Math.PI * 0.7) * 0.4;
-        leftBackShin.rotation.x = 0.2 + Math.max(0, Math.sin(walkCycle + Math.PI * 0.7) * 0.4);
+        leftBackLeg.rotation.x = Math.sin(walkCycle + Math.PI * 0.7) * 0.38;
+        leftBackShin.rotation.x = 0.15 + Math.max(0, Math.sin(walkCycle + Math.PI * 0.7) * 0.35);
 
-        rightBackLeg.rotation.x = Math.sin(walkCycle + Math.PI * 1.7) * 0.4;
-        rightBackShin.rotation.x = 0.2 + Math.max(0, Math.sin(walkCycle + Math.PI * 1.7) * 0.4);
+        rightBackLeg.rotation.x = Math.sin(walkCycle + Math.PI * 1.7) * 0.38;
+        rightBackShin.rotation.x = 0.15 + Math.max(0, Math.sin(walkCycle + Math.PI * 1.7) * 0.35);
 
+        // Counterbalance tail motion
         tailJoints.forEach((joint, idx) => {
-          joint.rotation.y = Math.sin(walkCycle + idx * 0.5) * 0.22;
-          joint.rotation.x = 0.4 + Math.sin(walkCycle * 0.5) * 0.1;
+          joint.rotation.y = Math.sin(walkCycle + idx * 0.4) * 0.18;
+          joint.rotation.x = 0.35 + Math.sin(walkCycle * 0.5) * 0.08;
+          joint.rotation.z = 0;
         });
+
+        jawGroup.rotation.set(0, 0, 0);
         break;
       }
 
@@ -123,210 +142,243 @@ export class CatAnimationController {
       case 'sprint': {
         const freq = (this.state === 'sprint' ? 14.0 : 10.5) * speedRatio;
         const runCycle = t * freq;
-        const amp = this.state === 'sprint' ? 0.7 : 0.55;
+        const amp = this.state === 'sprint' ? 0.65 : 0.50;
 
-        // Spine bounding leap
-        body.position.y = baseBodyY + Math.sin(runCycle) * 0.08;
-        body.rotation.x = Math.sin(runCycle) * 0.12;
+        // Feline bounding spine leap
+        body.position.y = baseBodyY + Math.sin(runCycle) * 0.06;
+        body.rotation.x = Math.sin(runCycle) * 0.10;
+        body.rotation.z = 0;
 
-        headGroup.rotation.x = -Math.sin(runCycle) * 0.1;
+        neckGroup.rotation.x = -Math.sin(runCycle) * 0.08;
+        headGroup.rotation.x = Math.sin(runCycle) * 0.05;
 
-        // Gallop cycle: forelegs bound together with slight offset
+        // Gallop bounds: forelegs thrust forward, hind legs push back
         leftFrontLeg.rotation.x = Math.sin(runCycle) * amp;
-        leftFrontForearm.rotation.x = Math.max(0, -Math.sin(runCycle) * amp * 1.2);
+        leftFrontForearm.rotation.x = Math.max(0, -Math.sin(runCycle) * amp * 1.1);
 
-        rightFrontLeg.rotation.x = Math.sin(runCycle + 0.3) * amp;
-        rightFrontForearm.rotation.x = Math.max(0, -Math.sin(runCycle + 0.3) * amp * 1.2);
+        rightFrontLeg.rotation.x = Math.sin(runCycle + 0.25) * amp;
+        rightFrontForearm.rotation.x = Math.max(0, -Math.sin(runCycle + 0.25) * amp * 1.1);
 
         leftBackLeg.rotation.x = -Math.sin(runCycle) * amp;
-        leftBackShin.rotation.x = 0.3 + Math.max(0, -Math.sin(runCycle) * amp);
+        leftBackShin.rotation.x = 0.25 + Math.max(0, -Math.sin(runCycle) * amp);
 
-        rightBackLeg.rotation.x = -Math.sin(runCycle + 0.3) * amp;
-        rightBackShin.rotation.x = 0.3 + Math.max(0, -Math.sin(runCycle + 0.3) * amp);
+        rightBackLeg.rotation.x = -Math.sin(runCycle + 0.25) * amp;
+        rightBackShin.rotation.x = 0.25 + Math.max(0, -Math.sin(runCycle + 0.25) * amp);
 
-        // Trailing aerodynamic tail
+        // Aerodynamic trailing tail
         tailJoints.forEach((joint, idx) => {
-          joint.rotation.y = Math.sin(runCycle * 0.5 + idx * 0.3) * 0.12;
-          joint.rotation.x = 0.15 + Math.sin(runCycle + idx * 0.4) * 0.18;
+          joint.rotation.y = Math.sin(runCycle * 0.5 + idx * 0.25) * 0.10;
+          joint.rotation.x = 0.15 + Math.sin(runCycle + idx * 0.35) * 0.14;
+          joint.rotation.z = 0;
         });
+
+        jawGroup.rotation.set(0, 0, 0);
         break;
       }
 
       case 'sneak': {
-        const freq = 4.0 * speedRatio;
+        const freq = 4.2 * speedRatio;
         const sneakCycle = t * freq;
 
-        // Low belly stalk
-        body.position.y = baseBodyY - 0.14 + Math.abs(Math.sin(sneakCycle)) * 0.015;
-        body.rotation.x = 0.05;
-        neckGroup.rotation.x = 0.2;
-        headGroup.rotation.x = -0.15; // Eyes fixed ahead on prey
+        // Low predatory stalk posture: belly low to grass, neck lowered and extended
+        body.position.y = baseBodyY - 0.10 + Math.abs(Math.sin(sneakCycle)) * 0.012;
+        body.rotation.x = 0.04;
+        body.rotation.z = 0;
 
-        leftFrontLeg.rotation.x = Math.sin(sneakCycle) * 0.35;
-        leftFrontForearm.rotation.x = Math.max(0, -Math.sin(sneakCycle) * 0.4);
-        rightFrontLeg.rotation.x = Math.sin(sneakCycle + Math.PI) * 0.35;
-        rightFrontForearm.rotation.x = Math.max(0, -Math.sin(sneakCycle + Math.PI) * 0.4);
+        neckGroup.rotation.x = 0.15;
+        headGroup.rotation.x = -0.12; // Eyes locked level forward on prey
 
-        leftBackLeg.rotation.x = Math.sin(sneakCycle + Math.PI * 0.7) * 0.35;
-        rightBackLeg.rotation.x = Math.sin(sneakCycle + Math.PI * 1.7) * 0.35;
+        leftFrontLeg.rotation.x = Math.sin(sneakCycle) * 0.30;
+        leftFrontForearm.rotation.x = Math.max(0, -Math.sin(sneakCycle) * 0.35);
+        rightFrontLeg.rotation.x = Math.sin(sneakCycle + Math.PI) * 0.30;
+        rightFrontForearm.rotation.x = Math.max(0, -Math.sin(sneakCycle + Math.PI) * 0.35);
 
-        // Tail held low and still
+        leftBackLeg.rotation.x = Math.sin(sneakCycle + Math.PI * 0.7) * 0.28;
+        rightBackLeg.rotation.x = Math.sin(sneakCycle + Math.PI * 1.7) * 0.28;
+
+        // Tail held low and quiet
         tailJoints.forEach((joint, idx) => {
-          joint.rotation.x = -0.1;
-          joint.rotation.y = Math.sin(t * 3.5 + idx) * 0.08;
+          joint.rotation.x = -0.08;
+          joint.rotation.y = Math.sin(t * 3.0 + idx) * 0.06;
+          joint.rotation.z = 0;
         });
         break;
       }
 
       case 'pounce_windup': {
-        // Butt wiggle & rear coil
-        body.position.y = baseBodyY - 0.18;
-        body.rotation.x = 0.22;
-        body.rotation.z = Math.sin(t * 18) * 0.06; // Eager butt wiggle!
+        // Eager butt wiggle & rear coil before launch
+        body.position.y = baseBodyY - 0.12;
+        body.rotation.x = 0.18;
+        body.rotation.z = Math.sin(t * 18) * 0.05; // Playful predator butt wiggle!
 
-        headGroup.rotation.x = -0.18;
+        neckGroup.rotation.x = 0.15;
+        headGroup.rotation.x = -0.15;
+
         tailJoints.forEach((joint) => {
-          joint.rotation.y = Math.sin(t * 20) * 0.25;
-          joint.rotation.x = -0.2;
+          joint.rotation.y = Math.sin(t * 20) * 0.20;
+          joint.rotation.x = -0.15;
+          joint.rotation.z = 0;
         });
 
-        leftFrontLeg.rotation.x = 0.4;
-        rightFrontLeg.rotation.x = 0.4;
-        leftBackLeg.rotation.x = -0.5;
-        rightBackLeg.rotation.x = -0.5;
+        leftFrontLeg.rotation.x = 0.35;
+        rightFrontLeg.rotation.x = 0.35;
+        leftBackLeg.rotation.x = -0.45;
+        rightBackLeg.rotation.x = -0.45;
         break;
       }
 
       case 'pounce_leap':
       case 'jump': {
-        body.position.y = baseBodyY + 0.15;
-        body.rotation.x = -0.25;
+        // Aerodynamic leap posture
+        body.position.y = baseBodyY + 0.12;
+        body.rotation.x = -0.22;
+        body.rotation.z = 0;
 
-        leftFrontLeg.rotation.x = -0.6;
-        rightFrontLeg.rotation.x = -0.6;
-        leftBackLeg.rotation.x = 0.5;
-        rightBackLeg.rotation.x = 0.5;
+        neckGroup.rotation.x = -0.10;
+        headGroup.rotation.x = 0.12;
+
+        leftFrontLeg.rotation.x = -0.55;
+        rightFrontLeg.rotation.x = -0.55;
+        leftFrontForearm.rotation.x = -0.2;
+        rightFrontForearm.rotation.x = -0.2;
+
+        leftBackLeg.rotation.x = 0.45;
+        rightBackLeg.rotation.x = 0.45;
 
         tailJoints.forEach((joint) => {
-          joint.rotation.x = 0.5;
+          joint.rotation.x = 0.45;
+          joint.rotation.y = 0;
+          joint.rotation.z = 0;
         });
         break;
       }
 
       case 'claw_swipe': {
         const swipeCycle = Math.sin(Math.min(Math.PI, t * 10));
-        body.rotation.y = swipeCycle * 0.3;
-        body.position.y = baseBodyY + 0.05;
+        body.rotation.y = swipeCycle * 0.25;
+        body.position.y = baseBodyY + 0.03;
 
-        // Left foreleg slashes out forward and across
-        leftFrontLeg.rotation.x = -0.8 * swipeCycle;
-        leftFrontLeg.rotation.z = -0.5 * swipeCycle;
-        leftFrontForearm.rotation.x = -0.6 * swipeCycle;
+        // Left foreleg unsheathes and slashes across frontal arc
+        leftFrontLeg.rotation.x = -0.75 * swipeCycle;
+        leftFrontLeg.rotation.z = -0.45 * swipeCycle;
+        leftFrontForearm.rotation.x = -0.55 * swipeCycle;
 
-        headGroup.rotation.y = -0.2 * swipeCycle;
-        jawGroup.rotation.x = swipeCycle * 0.4; // snarl
+        headGroup.rotation.y = -0.18 * swipeCycle;
+        jawGroup.rotation.x = swipeCycle * 0.35; // fierce snarl
         break;
       }
 
       case 'bite': {
         const biteCycle = Math.sin(Math.min(Math.PI, t * 12));
-        neckGroup.position.z = 0.36 + biteCycle * 0.15;
-        jawGroup.rotation.x = Math.sin(t * 14) > 0 ? 0.5 : 0.05;
+        neckGroup.rotation.x = -biteCycle * 0.15;
+        headGroup.rotation.x = biteCycle * 0.20;
+        jawGroup.rotation.x = Math.sin(t * 14) > 0 ? 0.45 : 0.05;
         break;
       }
 
       case 'sit': {
-        body.position.y = baseBodyY - 0.12;
-        body.rotation.x = -0.4;
+        // Natural feline sitting posture: hindquarters down, forelegs straight, tail curled
+        body.position.y = baseBodyY - 0.10;
+        body.rotation.x = -0.32;
+        body.rotation.z = 0;
 
-        leftFrontLeg.rotation.x = 0.38;
-        rightFrontLeg.rotation.x = 0.38;
-        leftFrontForearm.rotation.x = -0.05;
-        rightFrontForearm.rotation.x = -0.05;
+        leftFrontLeg.rotation.x = 0.32;
+        rightFrontLeg.rotation.x = 0.32;
+        leftFrontForearm.rotation.x = 0;
+        rightFrontForearm.rotation.x = 0;
 
-        leftBackLeg.rotation.x = -0.85;
-        leftBackShin.rotation.x = 1.1;
-        rightBackLeg.rotation.x = -0.85;
-        rightBackShin.rotation.x = 1.1;
+        leftBackLeg.rotation.x = -0.75;
+        leftBackShin.rotation.x = 0.95;
+        rightBackLeg.rotation.x = -0.75;
+        rightBackShin.rotation.x = 0.95;
 
-        headGroup.rotation.x = 0.35;
-        // Tail wrapped around paws
+        neckGroup.rotation.x = 0.25;
+        headGroup.rotation.x = 0.10;
+
+        // Tail gracefully wrapped around front paws
         tailJoints.forEach((joint, idx) => {
-          joint.rotation.x = 0.2;
-          joint.rotation.y = 0.4 + idx * 0.15;
+          joint.rotation.x = 0.15;
+          joint.rotation.y = 0.35 + idx * 0.18;
+          joint.rotation.z = 0;
         });
         break;
       }
 
       case 'lay_down':
       case 'sleep': {
-        body.position.y = baseBodyY - 0.28;
-        body.rotation.z = this.state === 'sleep' ? 0.2 : 0;
+        // Peaceful resting pose
+        body.position.y = baseBodyY - 0.24;
+        body.rotation.z = this.state === 'sleep' ? 0.15 : 0;
         body.rotation.x = 0;
 
-        leftFrontLeg.rotation.x = -0.7;
-        rightFrontLeg.rotation.x = -0.7;
-        leftBackLeg.rotation.x = 0.8;
-        rightBackLeg.rotation.x = 0.8;
+        leftFrontLeg.rotation.x = -0.65;
+        rightFrontLeg.rotation.x = -0.65;
+        leftBackLeg.rotation.x = 0.70;
+        rightBackLeg.rotation.x = 0.70;
 
-        headGroup.position.y = 0.05;
-        headGroup.rotation.x = this.state === 'sleep' ? 0.35 : 0.1;
+        neckGroup.rotation.x = 0.15;
+        headGroup.rotation.x = this.state === 'sleep' ? 0.25 : 0.05;
 
         tailJoints.forEach((joint) => {
-          joint.rotation.x = 0.1;
-          joint.rotation.y = 0.3;
+          joint.rotation.x = 0.08;
+          joint.rotation.y = 0.25;
+          joint.rotation.z = 0;
         });
         break;
       }
 
       case 'groom': {
-        body.position.y = baseBodyY - 0.12;
-        body.rotation.x = -0.4;
-        leftFrontLeg.rotation.x = -0.6; // Paw raised to head
-        leftFrontForearm.rotation.x = -0.8;
+        // Cat washing paw and face
+        body.position.y = baseBodyY - 0.10;
+        body.rotation.x = -0.32;
+        leftFrontLeg.rotation.x = -0.55; // Paw raised to head
+        leftFrontForearm.rotation.x = -0.75;
 
-        headGroup.rotation.x = 0.4;
-        headGroup.rotation.z = Math.sin(t * 5) * 0.15;
-        jawGroup.rotation.x = Math.sin(t * 10) > 0 ? 0.2 : 0; // Licking motion
+        neckGroup.rotation.x = 0.20;
+        headGroup.rotation.x = 0.30;
+        headGroup.rotation.z = Math.sin(t * 5) * 0.12;
+        jawGroup.rotation.x = Math.sin(t * 10) > 0 ? 0.18 : 0; // Licking motion
         break;
       }
 
       case 'hiss':
       case 'snarl': {
-        body.position.y = baseBodyY - 0.06;
-        body.rotation.x = 0.1;
-        neckGroup.rotation.x = -0.2;
-        headGroup.rotation.x = 0.3;
+        body.position.y = baseBodyY - 0.04;
+        body.rotation.x = 0.08;
+        neckGroup.rotation.x = -0.15;
+        headGroup.rotation.x = 0.22;
 
-        jawGroup.rotation.x = 0.45; // Wide open feline hiss
-        leftEarGroup.rotation.z = 0.7; // Flattened ears
-        rightEarGroup.rotation.z = -0.7;
+        jawGroup.rotation.x = 0.42; // Wide feline hiss snarl
+        leftEarGroup.rotation.z = 0.65; // Flattened ears
+        rightEarGroup.rotation.z = -0.65;
 
         tailJoints.forEach((joint, idx) => {
-          joint.rotation.y = Math.sin(t * 8 + idx) * 0.35;
-          joint.rotation.x = 0.6;
+          joint.rotation.y = Math.sin(t * 8 + idx) * 0.30;
+          joint.rotation.x = 0.50;
+          joint.rotation.z = 0;
         });
         break;
       }
 
       case 'hurt': {
-        body.position.y = baseBodyY - 0.08;
-        body.rotation.z = 0.2;
-        headGroup.rotation.x = -0.3;
-        jawGroup.rotation.x = 0.4;
+        body.position.y = baseBodyY - 0.06;
+        body.rotation.z = 0.15;
+        neckGroup.rotation.x = -0.20;
+        headGroup.rotation.x = -0.20;
+        jawGroup.rotation.x = 0.35;
         break;
       }
 
       case 'die': {
-        body.position.y = baseBodyY - 0.32;
-        body.rotation.z = 1.4; // Collapse sideways
-        body.rotation.x = 0.2;
-        leftFrontLeg.rotation.x = 0.4;
-        rightFrontLeg.rotation.x = -0.3;
-        leftBackLeg.rotation.x = 0.5;
-        rightBackLeg.rotation.x = -0.2;
-        headGroup.rotation.y = 0.4;
-        jawGroup.rotation.x = 0.2;
+        body.position.y = baseBodyY - 0.26;
+        body.rotation.z = 1.35; // Collapse sideways
+        body.rotation.x = 0.15;
+        leftFrontLeg.rotation.x = 0.35;
+        rightFrontLeg.rotation.x = -0.25;
+        leftBackLeg.rotation.x = 0.45;
+        rightBackLeg.rotation.x = -0.20;
+        headGroup.rotation.y = 0.35;
+        jawGroup.rotation.x = 0.15;
         break;
       }
     }

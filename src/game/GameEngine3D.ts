@@ -63,6 +63,9 @@ export class GameEngine3D {
   private keys: Record<string, boolean> = {};
   private clock = new THREE.Clock();
   private animationFrameId: number | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private rAf1: number | null = null;
+  private rAf2: number | null = null;
 
   // Callbacks to React UI
   private onStateChange?: (state: PlayerRuntimeState) => void;
@@ -129,14 +132,35 @@ export class GameEngine3D {
     this.scene.fog = new THREE.FogExp2(0x0f172a, 0.012);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // Explicitly enforce responsive canvas sizing
+    this.renderer.domElement.style.width = '100%';
+    this.renderer.domElement.style.height = '100%';
+    this.renderer.domElement.style.display = 'block';
+
+    container.innerHTML = '';
     container.appendChild(this.renderer.domElement);
 
     // 2. Camera
-    this.camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 400);
+    this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 400);
+
+    // Initial resize pass immediately and deferred across animation frames
+    this.onResize();
+    this.rAf1 = requestAnimationFrame(() => {
+      this.onResize();
+      this.rAf2 = requestAnimationFrame(() => {
+        this.onResize();
+      });
+    });
+
+    // ResizeObserver on the actual canvas container
+    this.resizeObserver = new ResizeObserver(() => {
+      this.onResize();
+    });
+    this.resizeObserver.observe(this.container);
 
     // 3. Lighting
     this.hemiLight = new THREE.HemisphereLight(0xfffbeb, 0x1e293b, 0.7);
@@ -450,9 +474,15 @@ export class GameEngine3D {
     if (!this.container || !this.renderer || !this.camera) return;
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h);
+    if (w > 0 && h > 0) {
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(w, h, false);
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      this.renderer.domElement.style.width = '100%';
+      this.renderer.domElement.style.height = '100%';
+      this.renderer.domElement.style.display = 'block';
+    }
   };
 
   // ==========================================
@@ -1027,8 +1057,14 @@ export class GameEngine3D {
   }
 
   public destroy() {
+    if (this.rAf1 !== null) cancelAnimationFrame(this.rAf1);
+    if (this.rAf2 !== null) cancelAnimationFrame(this.rAf2);
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
+    }
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
     }
     window.removeEventListener('resize', this.onResize);
     this.networkEngine.disconnect();
