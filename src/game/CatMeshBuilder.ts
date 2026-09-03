@@ -460,617 +460,368 @@ export class CatMeshBuilder {
   }
 
   /**
-   * Generates a sleek, contoured low-poly cheek fur tuft attached flush to the cheekbone.
-   * Expands the silhouette outward and back along the jawline without intersecting the muzzle.
-   * Directly inspired by stylized warrior cat cheek tufts.
+   * Generates a closed 3D volumetric low-poly cheek fur prism attached flush to the skull cheekbone.
+   * Widens the head silhouette into a natural long-haired / fluffy feline face without flat disconnected sheets.
    */
   private static createCheekFurGeometry(tier: 'medium' | 'fluffy' | 'extra_fluffy', isLeft: boolean): THREE.BufferGeometry {
     const sign = isLeft ? 1 : -1;
+    const mult = tier === 'extra_fluffy' ? 1.32 : tier === 'fluffy' ? 1.15 : 0.82;
 
-    if (tier === 'medium') {
-      // Sleek, streamlined single-tier low-poly cheek tuft
-      const w = 0.026;
-      const l = 0.046;
-      const d = 0.014;
+    // Anchor points along the feline skull cheek (in headGroup local coordinates)
+    const rootX = sign * 0.033;
+    const rootYTop = 0.050;
+    const rootYMid = 0.025;
+    const rootYBot = 0.005;
+    const rootZFront = 0.035;
+    const rootZMid = 0.010;
+    const rootZBack = -0.015;
 
-      const positions = new Float32Array([
-        // Top facet: Root to cheek flare to rear tip
-        0, 0.005, 0.010,
-        sign * w * 0.7, 0.0, 0.0,
-        sign * w, -d * 0.6, -l * 0.5,
+    // Outer lateral flare points (producing stylized low-poly fur clumps)
+    const flareX = sign * (0.055 * mult);
+    const flareY = 0.022 * mult;
+    const flareZ = 0.005;
 
-        // Outer lateral facet: Root to rear tip to trailing jaw point
-        0, -d * 0.8, 0.005,
-        sign * w, -d * 0.6, -l * 0.5,
-        sign * w * 0.45, -d * 1.2, -l * 0.85,
+    const lowFlareX = sign * (0.048 * mult);
+    const lowFlareY = -0.005 * mult;
+    const lowFlareZ = -0.008;
 
-        // Trailing blend facet: Cheek flare to trailing point to rear root
-        sign * w, -d * 0.6, -l * 0.5,
-        0, -d * 0.5, -l,
-        sign * w * 0.45, -d * 1.2, -l * 0.85,
+    const v0 = [rootX, rootYTop, rootZMid];
+    const v1 = [rootX, rootYMid, rootZFront];
+    const v2 = [rootX, rootYBot, rootZMid];
+    const v3 = [rootX, rootYMid, rootZBack];
+    const v4 = [flareX, flareY, flareZ];
+    const v5 = [lowFlareX, lowFlareY, lowFlareZ];
 
-        // Underside jaw blend facet
-        0, -d * 0.8, 0.005,
-        sign * w * 0.45, -d * 1.2, -l * 0.85,
-        0, -d * 0.5, -l,
-      ]);
+    const positions: number[] = [];
+    const addTri = (a: number[], b: number[], c: number[]) => {
+      if (isLeft) {
+        positions.push(...a, ...b, ...c);
+      } else {
+        positions.push(...a, ...c, ...b);
+      }
+    };
 
-      const uvs = new Float32Array([
-        0.58, 0.80,  0.64, 0.82,  0.68, 0.78,
-        0.58, 0.74,  0.68, 0.78,  0.65, 0.72,
-        0.68, 0.78,  0.60, 0.70,  0.65, 0.72,
-        0.58, 0.74,  0.65, 0.72,  0.60, 0.70,
-      ]);
-
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-      geo.computeVertexNormals();
-      return geo;
+    // Front-top facet
+    addTri(v0, v1, v4);
+    // Front-bottom facet
+    addTri(v1, v2, v5);
+    // Front-mid facet
+    addTri(v1, v5, v4);
+    // Top-rear facet
+    addTri(v0, v4, v3);
+    // Bottom-rear facet
+    addTri(v2, v3, v5);
+    // Outer mid-rear facet
+    addTri(v4, v5, v3);
+    // Base facets sealing against skull
+    if (isLeft) {
+      positions.push(...v0, ...v3, ...v2);
+      positions.push(...v0, ...v2, ...v1);
+    } else {
+      positions.push(...v0, ...v2, ...v3);
+      positions.push(...v0, ...v1, ...v2);
     }
 
-    // Multi-tiered layered longhair cheek fluff (upper flare + mid tuft + lower jaw tuft)
-    const scale = tier === 'extra_fluffy' ? 1.25 : 1.0;
-    const w1 = 0.038 * scale; // Upper cheekbone flare
-    const w2 = 0.046 * scale; // Mid cheek tuft
-    const w3 = 0.032 * scale; // Lower jaw tuft
-    const l1 = 0.055 * scale;
-    const l2 = 0.075 * scale;
-    const l3 = 0.065 * scale;
-    const d = 0.022 * scale;
-
-    const positions = new Float32Array([
-      // --- TIER 1: Upper Cheekbone Flare ---
-      0, 0.012, 0.015,
-      sign * w1 * 0.6, 0.006, 0.005,
-      sign * w1, -d * 0.35, -l1 * 0.45,
-
-      0, 0.012, 0.015,
-      sign * w1, -d * 0.35, -l1 * 0.45,
-      0, -d * 0.2, -l1 * 0.85,
-
-      // --- TIER 2: Main Outer Cheek Tuft (Widest point of head silhouette) ---
-      0, -d * 0.2, 0.010,
-      sign * w2, -d * 0.75, -l2 * 0.5,
-      sign * w1, -d * 0.35, -l1 * 0.45,
-
-      0, -d * 0.2, 0.010,
-      sign * w2 * 0.7, -d * 1.1, -l2 * 0.7,
-      sign * w2, -d * 0.75, -l2 * 0.5,
-
-      sign * w2, -d * 0.75, -l2 * 0.5,
-      sign * w2 * 0.7, -d * 1.1, -l2 * 0.7,
-      0, -d * 0.6, -l2,
-
-      // --- TIER 3: Lower Jaw / Throat Feather ---
-      0, -d * 0.65, 0.005,
-      sign * w3, -d * 1.35, -l3 * 0.45,
-      sign * w2 * 0.7, -d * 1.1, -l2 * 0.7,
-
-      0, -d * 0.65, 0.005,
-      0, -d * 0.9, -l3 * 0.9,
-      sign * w3, -d * 1.35, -l3 * 0.45,
-
-      sign * w3, -d * 1.35, -l3 * 0.45,
-      0, -d * 0.9, -l3 * 0.9,
-      0, -d * 0.6, -l2,
-    ]);
-
-    const uvs = new Float32Array([
-      0.56, 0.84,  0.62, 0.85,  0.68, 0.82,
-      0.56, 0.84,  0.68, 0.82,  0.62, 0.78,
-
-      0.56, 0.78,  0.70, 0.80,  0.68, 0.82,
-      0.56, 0.78,  0.66, 0.74,  0.70, 0.80,
-      0.70, 0.80,  0.66, 0.74,  0.60, 0.72,
-
-      0.56, 0.72,  0.66, 0.70,  0.66, 0.74,
-      0.56, 0.72,  0.58, 0.68,  0.66, 0.70,
-      0.66, 0.70,  0.58, 0.68,  0.60, 0.72,
-    ]);
-
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  /**
-   * Generates a feathered neck scruff collar wrapping around the feline neck.
-   * Bridges head and torso with low-poly downward-angled tufts.
-   */
-  private static createNeckScruffGeometry(isFluffy: boolean): THREE.BufferGeometry {
-    const scale = isFluffy ? 1.0 : 0.75;
-    const w = 0.085 * scale;
-    const h = 0.055 * scale;
-    const fwd = 0.045 * scale;
-    const back = 0.035 * scale;
-
-    const positions = new Float32Array([
-      // Left scruff tuft
-      0, 0.02, -back,
-      w * 0.8, -h * 0.2, -back * 0.5,
-      w * 1.1, -h * 0.8, -back * 0.2,
-
-      0, 0.02, -back,
-      w * 1.1, -h * 0.8, -back * 0.2,
-      w * 0.5, -h * 1.1, 0.0,
-
-      // Right scruff tuft
-      0, 0.02, -back,
-      -w * 1.1, -h * 0.8, -back * 0.2,
-      -w * 0.8, -h * 0.2, -back * 0.5,
-
-      0, 0.02, -back,
-      -w * 0.5, -h * 1.1, 0.0,
-      -w * 1.1, -h * 0.8, -back * 0.2,
-
-      // Lateral neck points to front shoulder bridge
-      w * 0.5, -h * 1.1, 0.0,
-      w * 0.7, -h * 0.7, fwd * 0.6,
-      0, -h * 0.4, fwd * 0.8,
-
-      -w * 0.5, -h * 1.1, 0.0,
-      0, -h * 0.4, fwd * 0.8,
-      -w * 0.7, -h * 0.7, fwd * 0.6,
-    ]);
-
-    const uvs = new Float32Array([
-      0.35, 0.40,  0.42, 0.38,  0.48, 0.35,
-      0.35, 0.40,  0.48, 0.35,  0.40, 0.30,
-
-      0.35, 0.40,  0.48, 0.35,  0.42, 0.38,
-      0.35, 0.40,  0.40, 0.30,  0.48, 0.35,
-
-      0.40, 0.30,  0.44, 0.34,  0.30, 0.38,
-      0.40, 0.30,  0.30, 0.38,  0.44, 0.34,
-    ]);
-
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  /**
-   * Generates a layered, scalloped V-shaped chest ruff.
-   * Begins naturally beneath the throat, cascades downward in stylized pointed clumps,
-   * and hugs the feline sternum seamlessly.
-   */
-  private static createLayeredChestRuffGeometry(level: 'medium' | 'fluffy' | 'extra_fluffy'): THREE.BufferGeometry {
-    if (level === 'medium') {
-      // Subtle, streamlined chest fullness
-      const hw = 0.048;
-      const h = 0.065;
-      const curve = 0.024;
-
-      const positions = new Float32Array([
-        // Upper crest to mid chest V
-        -hw, 0.015, 0,
-        0, 0.025, curve * 0.8,
-        -hw * 0.65, -h * 0.5, curve * 1.1,
-
-        0, 0.025, curve * 0.8,
-        hw, 0.015, 0,
-        hw * 0.65, -h * 0.5, curve * 1.1,
-
-        // Mid chest to central soft V-tip
-        0, 0.025, curve * 0.8,
-        hw * 0.65, -h * 0.5, curve * 1.1,
-        0, -h * 0.95, curve * 0.9,
-
-        0, 0.025, curve * 0.8,
-        0, -h * 0.95, curve * 0.9,
-        -hw * 0.65, -h * 0.5, curve * 1.1,
-      ]);
-
-      const uvs = new Float32Array([
-        0.20, 0.72,  0.26, 0.76,  0.22, 0.66,
-        0.26, 0.76,  0.32, 0.72,  0.30, 0.66,
-        0.26, 0.76,  0.30, 0.66,  0.26, 0.60,
-        0.26, 0.76,  0.26, 0.60,  0.22, 0.66,
-      ]);
-
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-      geo.computeVertexNormals();
-      return geo;
+    const uvs: number[] = [];
+    const triCount = positions.length / 9;
+    for (let i = 0; i < triCount; i++) {
+      uvs.push(0.58, 0.78, 0.66, 0.82, 0.62, 0.72);
     }
 
-    // Full layered scalloped chest ruff (3 distinct cascading tiers: Upper collar, Mid bib, Lower sternum V)
-    const scale = level === 'extra_fluffy' ? 1.20 : 1.0;
-    const hwTop = 0.068 * scale;
-    const hwMid = 0.086 * scale;
-    const h1 = 0.045 * scale;
-    const h2 = 0.090 * scale;
-    const h3 = 0.130 * scale;
-    const fwd = 0.036 * scale;
-
-    const positions = new Float32Array([
-      // === TIER 1: Upper Throat Clumps (Hugs throat below chin) ===
-      -hwTop, 0.018, 0.005,
-      0, 0.028, fwd * 0.7,
-      -hwTop * 0.55, -h1, fwd * 0.95,
-
-      0, 0.028, fwd * 0.7,
-      hwTop, 0.018, 0.005,
-      hwTop * 0.55, -h1, fwd * 0.95,
-
-      0, 0.028, fwd * 0.7,
-      hwTop * 0.55, -h1, fwd * 0.95,
-      0, -h1 * 1.1, fwd * 1.05,
-
-      0, 0.028, fwd * 0.7,
-      0, -h1 * 1.1, fwd * 1.05,
-      -hwTop * 0.55, -h1, fwd * 0.95,
-
-      // === TIER 2: Mid-Chest Layered Flakes (Scalloped lateral tufts) ===
-      -hwMid, -h1 * 0.7, fwd * 0.4,
-      -hwTop * 0.55, -h1, fwd * 0.95,
-      -hwMid * 0.75, -h2 * 0.85, fwd * 0.9,
-
-      hwTop * 0.55, -h1, fwd * 0.95,
-      hwMid, -h1 * 0.7, fwd * 0.4,
-      hwMid * 0.75, -h2 * 0.85, fwd * 0.9,
-
-      -hwTop * 0.55, -h1, fwd * 0.95,
-      0, -h1 * 1.1, fwd * 1.05,
-      -hwMid * 0.35, -h2, fwd * 1.1,
-
-      0, -h1 * 1.1, fwd * 1.05,
-      hwTop * 0.55, -h1, fwd * 0.95,
-      hwMid * 0.35, -h2, fwd * 1.1,
-
-      0, -h1 * 1.1, fwd * 1.05,
-      hwMid * 0.35, -h2, fwd * 1.1,
-      -hwMid * 0.35, -h2, fwd * 1.1,
-
-      // === TIER 3: Lower Sternum Cascading V-Taper ===
-      -hwMid * 0.75, -h2 * 0.85, fwd * 0.9,
-      -hwMid * 0.35, -h2, fwd * 1.1,
-      0, -h3, fwd * 0.85,
-
-      hwMid * 0.35, -h2, fwd * 1.1,
-      hwMid * 0.75, -h2 * 0.85, fwd * 0.9,
-      0, -h3, fwd * 0.85,
-
-      -hwMid * 0.35, -h2, fwd * 1.1,
-      hwMid * 0.35, -h2, fwd * 1.1,
-      0, -h3, fwd * 0.85,
-    ]);
-
-    const uvs = new Float32Array([
-      // Tier 1 UVs
-      0.18, 0.75,  0.26, 0.78,  0.22, 0.72,
-      0.26, 0.78,  0.34, 0.75,  0.30, 0.72,
-      0.26, 0.78,  0.30, 0.72,  0.26, 0.68,
-      0.26, 0.78,  0.26, 0.68,  0.22, 0.72,
-
-      // Tier 2 UVs
-      0.14, 0.70,  0.22, 0.72,  0.18, 0.64,
-      0.30, 0.72,  0.38, 0.70,  0.34, 0.64,
-      0.22, 0.72,  0.26, 0.68,  0.22, 0.62,
-      0.26, 0.68,  0.30, 0.72,  0.30, 0.62,
-      0.26, 0.68,  0.30, 0.62,  0.22, 0.62,
-
-      // Tier 3 UVs
-      0.18, 0.64,  0.22, 0.62,  0.26, 0.54,
-      0.30, 0.62,  0.34, 0.64,  0.26, 0.54,
-      0.22, 0.62,  0.30, 0.62,  0.26, 0.54,
-    ]);
-
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geo.computeVertexNormals();
     return geo;
   }
 
   /**
-   * Generates shoulder cape / chest transition fur attached to the body.
-   * Seamlessly connects neck ruff across the clavicles, shoulders, and toward front legs.
+   * Generates a closed 3D volumetric neck scruff collar wrapping around the feline neck.
+   * Bridges head and torso with solid downward-tapered low-poly facets.
    */
-  private static createShoulderCapeFurGeometry(isExtraFluffy: boolean): THREE.BufferGeometry {
-    const scale = isExtraFluffy ? 1.20 : 1.0;
-    const w = 0.105 * scale;
-    const fwd = 0.225;
-    const back = 0.120;
-    const h = 0.055 * scale;
+  private static createNeckScruffGeometry(tier: 'medium' | 'fluffy' | 'extra_fluffy'): THREE.BufferGeometry {
+    const mult = tier === 'extra_fluffy' ? 1.25 : tier === 'fluffy' ? 1.10 : 0.85;
+    const w = 0.058 * mult;
+    const fwd = 0.048 * mult;
+    const back = -0.035 * mult;
 
-    const positions = new Float32Array([
-      // Left shoulder cape
-      0, 0.035, fwd,
-      w * 0.85, 0.010, fwd * 0.9,
-      w * 1.05, -h * 0.7, back,
-
-      0, 0.035, fwd,
-      w * 1.05, -h * 0.7, back,
-      0, -h * 0.9, fwd * 0.95,
-
-      // Right shoulder cape
-      0, 0.035, fwd,
-      -w * 1.05, -h * 0.7, back,
-      -w * 0.85, 0.010, fwd * 0.9,
-
-      0, 0.035, fwd,
-      0, -h * 0.9, fwd * 0.95,
-      -w * 1.05, -h * 0.7, back,
-
-      // Lower chest to front leg transition facets
-      0, -h * 0.9, fwd * 0.95,
-      w * 0.75, -h * 1.35, fwd * 0.75,
-      0, -h * 1.45, fwd * 0.65,
-
-      0, -h * 0.9, fwd * 0.95,
-      0, -h * 1.45, fwd * 0.65,
-      -w * 0.75, -h * 1.35, fwd * 0.75,
-    ]);
-
-    const uvs = new Float32Array([
-      0.30, 0.60,  0.40, 0.58,  0.42, 0.50,
-      0.30, 0.60,  0.42, 0.50,  0.32, 0.48,
-
-      0.30, 0.60,  0.42, 0.50,  0.40, 0.58,
-      0.30, 0.60,  0.32, 0.48,  0.42, 0.50,
-
-      0.32, 0.48,  0.38, 0.42,  0.30, 0.40,
-      0.32, 0.48,  0.30, 0.40,  0.38, 0.42,
-    ]);
-
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  /**
-   * Generates long-fur volume along the dorsal spine/back attached to the body.
-   * Adds gentle, soft fullness along the backline without looking like a spiky mohawk.
-   */
-  private static createDorsalSpineFurGeometry(isExtraFluffy: boolean): THREE.BufferGeometry {
-    const scale = isExtraFluffy ? 1.20 : 1.0;
-    const hw = 0.075 * scale;
-    const ridgeH = 0.022 * scale;
-
-    // Spine spans from Z = +0.18 (withers) through Z = 0.0 (mid-back) to Z = -0.22 (sacrum)
-    const positions = new Float32Array([
-      // Segment 1: Withers to Mid-back (Left slope)
-      0, 0.105 + ridgeH, 0.18,
-      -hw, 0.075, 0.16,
-      -hw * 1.05, 0.070, 0.0,
-
-      0, 0.105 + ridgeH, 0.18,
-      -hw * 1.05, 0.070, 0.0,
-      0, 0.100 + ridgeH, 0.0,
-
-      // Segment 1: Withers to Mid-back (Right slope)
-      0, 0.105 + ridgeH, 0.18,
-      hw * 1.05, 0.070, 0.0,
-      hw, 0.075, 0.16,
-
-      0, 0.105 + ridgeH, 0.18,
-      0, 0.100 + ridgeH, 0.0,
-      hw * 1.05, 0.070, 0.0,
-
-      // Segment 2: Mid-back to Sacrum / Rump (Left slope)
-      0, 0.100 + ridgeH, 0.0,
-      -hw * 1.05, 0.070, 0.0,
-      -hw * 0.90, 0.075, -0.22,
-
-      0, 0.100 + ridgeH, 0.0,
-      -hw * 0.90, 0.075, -0.22,
-      0, 0.095 + ridgeH * 0.8, -0.22,
-
-      // Segment 2: Mid-back to Sacrum / Rump (Right slope)
-      0, 0.100 + ridgeH, 0.0,
-      hw * 0.90, 0.075, -0.22,
-      hw * 1.05, 0.070, 0.0,
-
-      0, 0.100 + ridgeH, 0.0,
-      0, 0.095 + ridgeH * 0.8, -0.22,
-      hw * 0.90, 0.075, -0.22,
-    ]);
-
-    const uvs = new Float32Array([
-      0.45, 0.55,  0.35, 0.55,  0.35, 0.35,
-      0.45, 0.55,  0.35, 0.35,  0.45, 0.35,
-
-      0.45, 0.55,  0.55, 0.35,  0.55, 0.55,
-      0.45, 0.55,  0.45, 0.35,  0.55, 0.35,
-
-      0.45, 0.35,  0.35, 0.35,  0.36, 0.18,
-      0.45, 0.35,  0.36, 0.18,  0.45, 0.18,
-
-      0.45, 0.35,  0.54, 0.18,  0.55, 0.35,
-      0.45, 0.35,  0.45, 0.18,  0.54, 0.18,
-    ]);
-
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  /**
-   * Generates continuous layered flank fur along the sides of the torso.
-   * Follows the torso from shoulder to mid-body to flank, expanding the silhouette.
-   */
-  private static createFlankFurGeometry(isLeft: boolean, isExtraFluffy: boolean): THREE.BufferGeometry {
-    const sign = isLeft ? 1 : -1;
-    const scale = isExtraFluffy ? 1.22 : 1.0;
-    const outward = (0.016 * scale);
-    const drop = (0.038 * scale);
-
-    // Flank points along the torso length (Z: +0.16 -> 0.0 -> -0.18)
-    const positions = new Float32Array([
-      // Layer 1: Shoulder / Upper Flank Tuft
-      sign * 0.088, 0.030, 0.16,
-      sign * (0.096 + outward), -0.015 - drop * 0.6, 0.11,
-      sign * 0.090, -0.060, 0.08,
-
-      sign * 0.088, 0.030, 0.16,
-      sign * 0.092, 0.020, 0.04,
-      sign * (0.096 + outward), -0.015 - drop * 0.6, 0.11,
-
-      // Layer 2: Mid-Torso Flank Tuft
-      sign * 0.092, 0.020, 0.04,
-      sign * (0.098 + outward * 1.1), -0.025 - drop, -0.02,
-      sign * 0.092, -0.065, -0.05,
-
-      sign * 0.092, 0.020, 0.04,
-      sign * 0.090, 0.015, -0.10,
-      sign * (0.098 + outward * 1.1), -0.025 - drop, -0.02,
-
-      // Layer 3: Rear Flank / Hip Tuft
-      sign * 0.090, 0.015, -0.10,
-      sign * (0.095 + outward), -0.020 - drop * 0.85, -0.16,
-      sign * 0.088, -0.060, -0.18,
-
-      sign * 0.090, 0.015, -0.10,
-      sign * 0.085, 0.010, -0.22,
-      sign * (0.095 + outward), -0.020 - drop * 0.85, -0.16,
-    ]);
-
-    const uvs = new Float32Array([
-      0.30, 0.48,  0.22, 0.42,  0.28, 0.38,
-      0.30, 0.48,  0.30, 0.38,  0.22, 0.42,
-
-      0.30, 0.38,  0.20, 0.30,  0.26, 0.26,
-      0.30, 0.38,  0.30, 0.26,  0.20, 0.30,
-
-      0.30, 0.26,  0.22, 0.20,  0.28, 0.16,
-      0.30, 0.26,  0.30, 0.16,  0.22, 0.20,
-    ]);
-
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  /**
-   * Generates a flowing volumetric plume envelope segment for the tail joints.
-   * Directly follows the 4 articulated tail chain bones, overlapping cleanly between joints
-   * to eliminate all visible gaps during rotation and curling.
-   */
-  private static createTailPlumeGeometry(jointIndex: number, isExtraFluffy: boolean): THREE.BufferGeometry {
-    const mult = isExtraFluffy ? 1.25 : 1.05;
-
-    // Segment bounds: Starts at +0.015 to overlap the parent joint/body, extends to -0.075 (0.070m joint length)
-    const zStart = 0.015;
-    const zMid = -0.035;
-    const zEnd = -0.075;
-
-    let w1 = 0.055 * mult; // Start width
-    let h1 = 0.048 * mult; // Start height
-    let w2 = 0.076 * mult; // Mid width
-    let h2 = 0.065 * mult; // Mid height
-    let w3 = 0.082 * mult; // End width
-    let h3 = 0.070 * mult; // End height
-
-    if (jointIndex === 0) {
-      // Base joint connected to rump
-      w1 = 0.048 * mult;
-      h1 = 0.042 * mult;
-      w2 = 0.068 * mult;
-      h2 = 0.058 * mult;
-      w3 = 0.080 * mult;
-      h3 = 0.068 * mult;
-    } else if (jointIndex === 1) {
-      // Main mid plume arch
-      w1 = 0.080 * mult; // Seamlessly matches t0 end
-      h1 = 0.068 * mult;
-      w2 = 0.092 * mult;
-      h2 = 0.078 * mult;
-      w3 = 0.088 * mult;
-      h3 = 0.075 * mult;
-    } else if (jointIndex === 2) {
-      // Plume apex
-      w1 = 0.088 * mult; // Matches t1 end
-      h1 = 0.075 * mult;
-      w2 = 0.084 * mult;
-      h2 = 0.072 * mult;
-      w3 = 0.074 * mult;
-      h3 = 0.062 * mult;
-    } else if (jointIndex === 3) {
-      // Tip joint: Smooth natural taper down to a soft rounded tip
-      w1 = 0.074 * mult; // Matches t2 end
-      h1 = 0.062 * mult;
-      w2 = 0.052 * mult;
-      h2 = 0.044 * mult;
-      w3 = 0.030 * mult;
-      h3 = 0.026 * mult;
-    }
-
-    const hw1 = w1 * 0.5;
-    const hh1 = h1 * 0.5;
-    const hw2 = w2 * 0.5;
-    const hh2 = h2 * 0.5;
-    const hw3 = w3 * 0.5;
-    const hh3 = h3 * 0.5;
-
-    // Helper: 8 vertices around an elliptical cross section
-    const ring1 = [
-      [0, hh1, zStart],
-      [hw1 * 0.72, hh1 * 0.72, zStart],
-      [hw1, 0, zStart],
-      [hw1 * 0.72, -hh1 * 0.72, zStart],
-      [0, -hh1, zStart],
-      [-hw1 * 0.72, -hh1 * 0.72, zStart],
-      [-hw1, 0, zStart],
-      [-hw1 * 0.72, hh1 * 0.72, zStart],
+    // Cross-section ring for neck collar (in neckGroup space)
+    const ringTop = [
+      [0, 0.035, fwd],
+      [w * 0.75, 0.030, fwd * 0.5],
+      [w, 0.025, 0],
+      [w * 0.75, 0.025, back],
+      [0, 0.025, back * 1.1],
+      [-w * 0.75, 0.025, back],
+      [-w, 0.025, 0],
+      [-w * 0.75, 0.030, fwd * 0.5],
     ];
 
-    const ring2 = [
-      [0, hh2, zMid],
-      [hw2 * 0.72, hh2 * 0.72, zMid],
-      [hw2, 0, zMid],
-      [hw2 * 0.72, -hh2 * 0.72, zMid],
-      [0, -hh2, zMid],
-      [-hw2 * 0.72, -hh2 * 0.72, zMid],
-      [-hw2, 0, zMid],
-      [-hw2 * 0.72, hh2 * 0.72, zMid],
-    ];
-
-    const ring3 = [
-      [0, hh3, zEnd],
-      [hw3 * 0.72, hh3 * 0.72, zEnd],
-      [hw3, 0, zEnd],
-      [hw3 * 0.72, -hh3 * 0.72, zEnd],
-      [0, -hh3, zEnd],
-      [-hw3 * 0.72, -hh3 * 0.72, zEnd],
-      [-hw3, 0, zEnd],
-      [-hw3 * 0.72, hh3 * 0.72, zEnd],
+    const ringBot = [
+      [0, -0.025, fwd * 1.15],
+      [w * 0.95, -0.035, fwd * 0.6],
+      [w * 1.20, -0.040, 0],
+      [w * 0.95, -0.040, back * 1.1],
+      [0, -0.035, back * 1.2],
+      [-w * 0.95, -0.040, back * 1.1],
+      [-w * 1.20, -0.040, 0],
+      [-w * 0.95, -0.035, fwd * 0.6],
     ];
 
     const positions: number[] = [];
+    const N = 8;
+    for (let i = 0; i < N; i++) {
+      const next = (i + 1) % N;
+      positions.push(...ringTop[i], ...ringTop[next], ...ringBot[next]);
+      positions.push(...ringTop[i], ...ringBot[next], ...ringBot[i]);
+    }
 
-    // Connect ring1 -> ring2 (8 quads = 16 triangles)
-    for (let i = 0; i < 8; i++) {
-      const next = (i + 1) % 8;
+    const uvs: number[] = [];
+    const triCount = positions.length / 9;
+    for (let i = 0; i < triCount; i++) {
+      uvs.push(0.35, 0.68, 0.42, 0.64, 0.38, 0.58);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  /**
+   * Generates a multi-tiered closed 3D volumetric chest ruff bib.
+   * Cascades downward from beneath the throat/chin, flows over the sternum,
+   * and tapers into a sculpted V-point between the front legs.
+   */
+  private static createLayeredChestRuffGeometry(tier: 'medium' | 'fluffy' | 'extra_fluffy'): THREE.BufferGeometry {
+    const mult = tier === 'extra_fluffy' ? 1.30 : tier === 'fluffy' ? 1.15 : 0.85;
+
+    // Cross section rings in neckGroup coordinates:
+    // Ring 0: Throat collar under chin
+    const r0_left_back   = [-0.035 * mult, 0.02, -0.015];
+    const r0_left_front  = [-0.025 * mult, 0.02,  0.035];
+    const r0_mid_front   = [ 0.000,        0.02,  0.045 * mult];
+    const r0_right_front = [ 0.025 * mult, 0.02,  0.035];
+    const r0_right_back  = [ 0.035 * mult, 0.02, -0.015];
+
+    // Ring 1: Mid-Chest Bib Flare (widest point of forward chest volume)
+    const r1_left_back   = [-0.050 * mult, -0.04, -0.010];
+    const r1_left_front  = [-0.042 * mult, -0.04,  0.055 * mult];
+    const r1_mid_front   = [ 0.000,        -0.04,  0.075 * mult];
+    const r1_right_front = [ 0.042 * mult, -0.04,  0.055 * mult];
+    const r1_right_back  = [ 0.050 * mult, -0.04, -0.010];
+
+    // Ring 2: Lower Sternum Taper (converging towards V-point)
+    const r2_left_back   = [-0.035 * mult, -0.08, -0.005];
+    const r2_left_front  = [-0.022 * mult, -0.08,  0.045 * mult];
+    const r2_mid_front   = [ 0.000,        -0.08,  0.058 * mult];
+    const r2_right_front = [ 0.022 * mult, -0.08,  0.045 * mult];
+    const r2_right_back  = [ 0.035 * mult, -0.08, -0.005];
+
+    // Bottom Tip: V-point
+    const tip = [0.000, -0.115 * mult, 0.030 * mult];
+
+    const positions: number[] = [];
+    const addQuad = (p0: number[], p1: number[], p2: number[], p3: number[]) => {
+      positions.push(...p0, ...p1, ...p2);
+      positions.push(...p0, ...p2, ...p3);
+    };
+
+    // Connect Ring 0 to Ring 1 (Front & Sides)
+    addQuad(r0_left_back,   r0_left_front,  r1_left_front,  r1_left_back);
+    addQuad(r0_left_front,  r0_mid_front,   r1_mid_front,   r1_left_front);
+    addQuad(r0_mid_front,   r0_right_front, r1_right_front, r1_mid_front);
+    addQuad(r0_right_front, r0_right_back,  r1_right_back,  r1_right_front);
+
+    // Connect Ring 1 to Ring 2 (Front & Sides)
+    addQuad(r1_left_back,   r1_left_front,  r2_left_front,  r2_left_back);
+    addQuad(r1_left_front,  r1_mid_front,   r2_mid_front,   r2_left_front);
+    addQuad(r1_mid_front,   r1_right_front, r2_right_front, r1_mid_front);
+    addQuad(r1_right_front, r1_right_back,  r2_right_back,  r2_right_front);
+
+    // Connect Ring 2 to Tip
+    positions.push(...r2_left_back,   ...r2_left_front,  ...tip);
+    positions.push(...r2_left_front,  ...r2_mid_front,   ...tip);
+    positions.push(...r2_mid_front,   ...r2_right_front, ...tip);
+    positions.push(...r2_right_front, ...r2_right_back,  ...tip);
+
+    // Top Cap (seals against throat)
+    positions.push(...r0_left_back, ...r0_left_front, ...r0_mid_front);
+    positions.push(...r0_left_back, ...r0_mid_front, ...r0_right_back);
+    positions.push(...r0_right_back, ...r0_mid_front, ...r0_right_front);
+
+    // Back wall (seals against chest/neck body)
+    addQuad(r0_right_back, r0_left_back, r1_left_back, r1_right_back);
+    addQuad(r1_right_back, r1_left_back, r2_left_back, r2_right_back);
+    positions.push(...r2_right_back, ...r2_left_back, ...tip);
+
+    const uvs: number[] = [];
+    const triCount = positions.length / 9;
+    for (let i = 0; i < triCount; i++) {
+      uvs.push(0.24, 0.74, 0.32, 0.72, 0.28, 0.62);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  /**
+   * Generates a conforming, closed 3D volumetric outer fur mantle for the feline torso.
+   * Hugs the body from shoulders to rump, providing subtle dorsal fullness, sculpted flank curves,
+   * and underbelly long-fur drape without enlarging the core body or making the cat look fat.
+   */
+  private static createTorsoMantleGeometry(tier: 'medium' | 'fluffy' | 'extra_fluffy'): THREE.BufferGeometry {
+    const mult = tier === 'extra_fluffy' ? 1.22 : tier === 'fluffy' ? 1.10 : 0.90;
+
+    // 5 cross-sectional slices along the torso Z-axis (in body space, Z: +0.17 withers to -0.17 rump)
+    const zSlices = [0.17, 0.08, 0.00, -0.09, -0.17];
+
+    const spineY = [0.112 * mult, 0.108 * mult, 0.104 * mult, 0.103 * mult, 0.100 * mult];
+    const flankW = [0.080 * mult, 0.086 * mult, 0.085 * mult, 0.082 * mult, 0.078 * mult];
+    const flankY = [0.038,        0.034,        0.030,        0.030,        0.034];
+    const drapeW = [0.072 * mult, 0.076 * mult, 0.075 * mult, 0.072 * mult, 0.068 * mult];
+    const drapeY = [-0.045 * mult, -0.052 * mult, -0.055 * mult, -0.050 * mult, -0.042 * mult];
+    const bellyY = [-0.080 * mult, -0.086 * mult, -0.088 * mult, -0.084 * mult, -0.076 * mult];
+
+    const rings: number[][][] = [];
+    for (let s = 0; s < 5; s++) {
+      const z = zSlices[s];
+      rings.push([
+        [0, spineY[s], z],
+        [flankW[s], flankY[s], z],
+        [drapeW[s], drapeY[s], z],
+        [0, bellyY[s], z],
+        [-drapeW[s], drapeY[s], z],
+        [-flankW[s], flankY[s], z],
+      ]);
+    }
+
+    const positions: number[] = [];
+    const S = 6;
+
+    // Connect rings along the torso length
+    for (let s = 0; s < 4; s++) {
+      const curr = rings[s];
+      const next = rings[s + 1];
+      for (let i = 0; i < S; i++) {
+        const iNext = (i + 1) % S;
+        positions.push(...curr[i], ...curr[iNext], ...next[iNext]);
+        positions.push(...curr[i], ...next[iNext], ...next[i]);
+      }
+    }
+
+    // Front cap at Z = +0.17 (seals against shoulders)
+    const frontCenter = [0, 0.02, 0.175];
+    for (let i = 0; i < S; i++) {
+      const iNext = (i + 1) % S;
+      positions.push(...frontCenter, ...rings[0][i], ...rings[0][iNext]);
+    }
+
+    // Rear cap at Z = -0.17 (seals against rump)
+    const rearCenter = [0, 0.02, -0.175];
+    for (let i = 0; i < S; i++) {
+      const iNext = (i + 1) % S;
+      positions.push(...rearCenter, ...rings[4][iNext], ...rings[4][i]);
+    }
+
+    const uvs: number[] = [];
+    const triCount = positions.length / 9;
+    for (let i = 0; i < triCount; i++) {
+      uvs.push(0.40, 0.45, 0.48, 0.42, 0.44, 0.35);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  /**
+   * Generates an overlapping, seamless 10-sided volumetric cylinder sleeve for each tail joint.
+   * Extends with 40mm deep inter-joint overlap (+0.022 to -0.082) so no gaps or seams ever appear
+   * during dynamic animations.
+   */
+  private static createTailFurGeometry(jointIndex: number, tier: 'medium' | 'fluffy' | 'extra_fluffy'): THREE.BufferGeometry {
+    const mult = tier === 'extra_fluffy' ? 1.35 : tier === 'fluffy' ? 1.18 : 0.95;
+
+    // Joint length is 0.070m.
+    // Sleeve extends from +0.022 (penetrates parent joint) to -0.082 (overlaps child joint)
+    const zStart = 0.022;
+    const zMid = -0.035;
+    const zEnd = jointIndex === 3 ? -0.070 : -0.082;
+
+    let r1 = 0.030 * mult;
+    let r2 = 0.044 * mult;
+    let r3 = 0.046 * mult;
+
+    if (jointIndex === 0) {
+      r1 = 0.032 * mult;
+      r2 = 0.046 * mult;
+      r3 = 0.052 * mult;
+    } else if (jointIndex === 1) {
+      r1 = 0.052 * mult;
+      r2 = 0.060 * mult;
+      r3 = 0.058 * mult;
+    } else if (jointIndex === 2) {
+      r1 = 0.058 * mult;
+      r2 = 0.054 * mult;
+      r3 = 0.044 * mult;
+    } else if (jointIndex === 3) {
+      r1 = 0.044 * mult;
+      r2 = 0.034 * mult;
+      r3 = 0.016 * mult;
+    }
+
+    const SIDES = 10;
+    const ring1: number[][] = [];
+    const ring2: number[][] = [];
+    const ring3: number[][] = [];
+
+    for (let i = 0; i < SIDES; i++) {
+      const angle = (i / SIDES) * Math.PI * 2;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      ring1.push([cos * r1, sin * r1 * 1.08, zStart]);
+      ring2.push([cos * r2, sin * r2 * 1.12, zMid]);
+      ring3.push([cos * r3, sin * r3 * 1.08, zEnd]);
+    }
+
+    const positions: number[] = [];
+
+    // Connect ring1 -> ring2
+    for (let i = 0; i < SIDES; i++) {
+      const next = (i + 1) % SIDES;
       positions.push(...ring1[i], ...ring1[next], ...ring2[next]);
       positions.push(...ring1[i], ...ring2[next], ...ring2[i]);
     }
 
-    // Connect ring2 -> ring3 (8 quads = 16 triangles)
-    for (let i = 0; i < 8; i++) {
-      const next = (i + 1) % 8;
+    // Connect ring2 -> ring3
+    for (let i = 0; i < SIDES; i++) {
+      const next = (i + 1) % SIDES;
       positions.push(...ring2[i], ...ring2[next], ...ring3[next]);
-      positions.push(...ring2[i], ...ring3[next], ...ring3[i]);
+      positions.push(...ring2[i], ...ring3[next], ...ring2[i]);
     }
 
-    // End cap for tip joint
+    // Base cap for joint 0 (seals deep against rump)
+    if (jointIndex === 0) {
+      const center = [0, 0, zStart + 0.005];
+      for (let i = 0; i < SIDES; i++) {
+        const next = (i + 1) % SIDES;
+        positions.push(...center, ...ring1[next], ...ring1[i]);
+      }
+    }
+
+    // Dome tip cap for joint 3
     if (jointIndex === 3) {
-      const tipZ = zEnd - 0.025;
-      for (let i = 0; i < 8; i++) {
-        const next = (i + 1) % 8;
-        positions.push(...ring3[i], ...ring3[next], 0, 0, tipZ);
+      const tipCenter = [0, 0, zEnd - 0.018 * mult];
+      for (let i = 0; i < SIDES; i++) {
+        const next = (i + 1) % SIDES;
+        positions.push(...ring3[i], ...ring3[next], ...tipCenter);
       }
     }
 
@@ -1091,43 +842,52 @@ export class CatMeshBuilder {
   }
 
   /**
-   * Generates hind leg pantaloons / breeches and foreleg elbow feathering.
-   * Flushly attached along the back of the feline limbs.
+   * Generates closed 3D volumetric leg feathering / breeches.
+   * Hugs the rear profile of the feline limbs cleanly.
    */
-  private static createLegFeatherGeometry(width: number, length: number, isLeft: boolean): THREE.BufferGeometry {
+  private static createLegFeatherGeometry(isHind: boolean, isLeft: boolean, tier: 'medium' | 'fluffy' | 'extra_fluffy'): THREE.BufferGeometry {
     const sign = isLeft ? 1 : -1;
-    const hw = width * 0.5;
-    const positions = new Float32Array([
-      // Upper limb root to rear feather point
-      0, 0.01, 0.005,
-      sign * hw * 0.5, -length * 0.4, -width * 0.85,
-      0, -length * 0.85, -width * 0.4,
+    const mult = tier === 'extra_fluffy' ? 1.25 : 1.0;
+    const length = (isHind ? 0.095 : 0.075) * mult;
+    const depth = (isHind ? 0.035 : 0.024) * mult;
+    const width = 0.022 * mult;
 
-      // Inner limb blend
-      0, 0.01, 0.005,
-      0, -length * 0.85, -width * 0.4,
-      -sign * hw * 0.35, -length * 0.4, -width * 0.5,
+    const rootTop = [0, 0.01, 0.005];
+    const rootBot = [0, -length, -depth * 0.2];
+    const rearApex = [sign * width * 0.4, -length * 0.45, -depth];
+    const innerBase = [-sign * width * 0.35, -length * 0.45, -depth * 0.5];
+    const outerBase = [sign * width * 0.55, -length * 0.45, 0.0];
 
-      // Lower feather taper to hock/paw
-      sign * hw * 0.5, -length * 0.4, -width * 0.85,
-      0, -length, -width * 0.15,
-      0, -length * 0.85, -width * 0.4,
+    const positions: number[] = [];
+    const addTri = (a: number[], b: number[], c: number[]) => {
+      if (isLeft) {
+        positions.push(...a, ...b, ...c);
+      } else {
+        positions.push(...a, ...c, ...b);
+      }
+    };
 
-      0, -length * 0.85, -width * 0.4,
-      0, -length, -width * 0.15,
-      -sign * hw * 0.35, -length * 0.4, -width * 0.5,
-    ]);
+    // Upper outer facet
+    addTri(rootTop, outerBase, rearApex);
+    // Lower outer facet
+    addTri(outerBase, rootBot, rearApex);
+    // Upper inner facet
+    addTri(rootTop, rearApex, innerBase);
+    // Lower inner facet
+    addTri(innerBase, rearApex, rootBot);
+    // Front base facet (seals against leg)
+    addTri(rootTop, innerBase, outerBase);
+    addTri(innerBase, rootBot, outerBase);
 
-    const uvs = new Float32Array([
-      0.80, 0.22,  0.88, 0.18,  0.82, 0.12,
-      0.80, 0.22,  0.82, 0.12,  0.76, 0.16,
-      0.88, 0.18,  0.82, 0.08,  0.82, 0.12,
-      0.82, 0.12,  0.82, 0.08,  0.76, 0.16,
-    ]);
+    const uvs: number[] = [];
+    const triCount = positions.length / 9;
+    for (let i = 0; i < triCount; i++) {
+      uvs.push(0.80, 0.20, 0.88, 0.16, 0.82, 0.10);
+    }
 
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geo.computeVertexNormals();
     return geo;
   }
@@ -1255,35 +1015,35 @@ export class CatMeshBuilder {
     // ==========================================
     const buildEyeMesh = (isLeft: boolean, mat: THREE.Material) => {
       const eyeNode = new THREE.Group();
-      // Elevated to upper-middle face naturally within the skull socket above the muzzle and below the brow
-      eyeNode.position.set(isLeft ? 0.033 : -0.033, 0.014, 0.0285);
-      eyeNode.rotation.y = isLeft ? 0.32 : -0.32;
-      eyeNode.rotation.x = -0.08;
-      eyeNode.rotation.z = isLeft ? 0.06 : -0.06;
+      // Elevated to the anatomically derived eye socket facet on upper-middle face
+      eyeNode.position.set(isLeft ? 0.026 : -0.026, 0.050, 0.040);
+      eyeNode.rotation.y = isLeft ? 0.40 : -0.40;
+      eyeNode.rotation.x = -0.14;
+      eyeNode.rotation.z = isLeft ? 0.08 : -0.08;
 
       // 1. Dark feline eyeliner contour
-      const rimGeo = new THREE.RingGeometry(0.007, 0.016, 12);
-      const rimMat = new THREE.MeshBasicMaterial({ color: 0x18181b, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+      const rimGeo = new THREE.RingGeometry(0.007, 0.015, 16);
+      const rimMat = new THREE.MeshBasicMaterial({ color: 0x18181b, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
       const rim = new THREE.Mesh(rimGeo, rimMat);
       eyeNode.add(rim);
 
       // 2. Glowing Iris Disc
-      const irisGeo = new THREE.CircleGeometry(0.013, 12);
+      const irisGeo = new THREE.CircleGeometry(0.0125, 16);
       const iris = new THREE.Mesh(irisGeo, mat);
-      iris.position.z = 0.001;
+      iris.position.z = 0.0008;
       eyeNode.add(iris);
 
       // 3. Sharp Feline Slit Pupil
-      const pupilGeo = new THREE.PlaneGeometry(0.0035, 0.018);
+      const pupilGeo = new THREE.PlaneGeometry(0.0035, 0.017);
       const pupil = new THREE.Mesh(pupilGeo, pupilMat);
-      pupil.position.z = 0.002;
+      pupil.position.z = 0.0016;
       eyeNode.add(pupil);
 
       // 4. Subtle Gloss Highlight
-      const glossGeo = new THREE.CircleGeometry(0.004, 8);
-      const glossMat = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.75, transparent: true });
+      const glossGeo = new THREE.CircleGeometry(0.0035, 8);
+      const glossMat = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.85, transparent: true });
       const gloss = new THREE.Mesh(glossGeo, glossMat);
-      gloss.position.set(0.0035, 0.004, 0.003);
+      gloss.position.set(0.003, 0.004, 0.0024);
       eyeNode.add(gloss);
 
       return { eyeNode, iris };
@@ -1395,99 +1155,62 @@ export class CatMeshBuilder {
     const isExtraFluffy = furStyle === 'fluffy' || furStyle === 'very_fluffy' || furStyle === 'thick_winter';
 
     if (isShort) {
-      // 1. SHORT / SLEEK: Clean, streamlined, close-fitting athletic low-poly feline
-      body.scale.set(bodyWidth * 0.96, 0.98, 1.0);
+      // 1. SHORT / SLEEK: Clean athletic profile
+      // No extra fur mantle
     } else if (isMedium) {
-      // 2. MEDIUM-FLUFFY: Soft woodland feline coat with subtly fuller cheeks, neck scruff, chest ruff, and fuller tail
-      body.scale.set(bodyWidth * 1.03, 1.02, 1.0);
-
-      // Streamlined cheek tufts flush with cheekbones
+      // 2. MEDIUM-FLUFFY: Soft woodland feline coat with volumetric cheeks, neck scruff, and chest ruff
       const lCheekGeo = this.createCheekFurGeometry('medium', true);
       const lCheek = new THREE.Mesh(lCheekGeo, coatMaterial);
-      lCheek.position.set(0.044, -0.010, 0.008);
-      lCheek.rotation.set(0.04, 0.22, -0.12);
       lCheek.castShadow = true;
       headGroup.add(lCheek);
 
       const rCheekGeo = this.createCheekFurGeometry('medium', false);
       const rCheek = new THREE.Mesh(rCheekGeo, coatMaterial);
-      rCheek.position.set(-0.044, -0.010, 0.008);
-      rCheek.rotation.set(0.04, -0.22, 0.12);
       rCheek.castShadow = true;
       headGroup.add(rCheek);
 
-      // Subtle neck scruff
-      const neckScruffGeo = this.createNeckScruffGeometry(false);
+      const neckScruffGeo = this.createNeckScruffGeometry('medium');
       const neckScruff = new THREE.Mesh(neckScruffGeo, coatMaterial);
-      neckScruff.position.set(0, 0.01, -0.02);
       neckScruff.castShadow = true;
       neckGroup.add(neckScruff);
 
-      // Subtle streamlined soft chest ruff
       const medRuffGeo = this.createLayeredChestRuffGeometry('medium');
       const medRuff = new THREE.Mesh(medRuffGeo, coatMaterial);
-      medRuff.position.set(0, -0.04, 0.035);
       medRuff.castShadow = true;
       neckGroup.add(medRuff);
 
     } else if (isLongOrFluffy) {
-      // 3. FLUFFY / LONG-HAIRED: Full majestic feline coat with layered chest ruff, cheek fluff, flank feathers, and back fur
-      const fluffMult = isExtraFluffy ? 1.10 : 1.06;
-      body.scale.set(bodyWidth * fluffMult, 1.03, 1.0);
+      // 3. FLUFFY / LONG-HAIRED: Full majestic feline coat with closed volumetric cheek tufts, neck scruff, cascading V-shaped chest ruff, and conforming torso mantle
+      const tier = isExtraFluffy ? 'extra_fluffy' : 'fluffy';
 
-      // Sculpted layered cheek fluff (broadens the skull silhouette and trails back along jawline)
-      const lCheekGeo = this.createCheekFurGeometry(isExtraFluffy ? 'extra_fluffy' : 'fluffy', true);
+      // Sculpted 3D cheek fur prisms attached to skull cheekbones
+      const lCheekGeo = this.createCheekFurGeometry(tier, true);
       const lCheek = new THREE.Mesh(lCheekGeo, coatMaterial);
-      lCheek.position.set(0.044, -0.010, 0.008);
-      lCheek.rotation.set(0.04, 0.24, -0.14);
       lCheek.castShadow = true;
       headGroup.add(lCheek);
 
-      const rCheekGeo = this.createCheekFurGeometry(isExtraFluffy ? 'extra_fluffy' : 'fluffy', false);
+      const rCheekGeo = this.createCheekFurGeometry(tier, false);
       const rCheek = new THREE.Mesh(rCheekGeo, coatMaterial);
-      rCheek.position.set(-0.044, -0.010, 0.008);
-      rCheek.rotation.set(0.04, -0.24, 0.14);
       rCheek.castShadow = true;
       headGroup.add(rCheek);
 
-      // Feathered neck scruff collar wrapping around the neck
-      const neckScruffGeo = this.createNeckScruffGeometry(true);
+      // Volumetric neck scruff collar
+      const neckScruffGeo = this.createNeckScruffGeometry(tier);
       const neckScruff = new THREE.Mesh(neckScruffGeo, coatMaterial);
-      neckScruff.position.set(0, 0.01, -0.02);
       neckScruff.castShadow = true;
       neckGroup.add(neckScruff);
 
-      // Cascading layered V-shaped chest ruff (starts below chin, flows smoothly down throat and upper chest)
-      const chestRuffGeo = this.createLayeredChestRuffGeometry(isExtraFluffy ? 'extra_fluffy' : 'fluffy');
+      // Multi-tiered cascading V-shaped chest ruff
+      const chestRuffGeo = this.createLayeredChestRuffGeometry(tier);
       const chestRuff = new THREE.Mesh(chestRuffGeo, coatMaterial);
-      chestRuff.position.set(0, -0.04, 0.035);
       chestRuff.castShadow = true;
       neckGroup.add(chestRuff);
 
-      // Shoulder cape fur: Connects throat ruff to shoulders and chest transition
-      const shoulderCapeGeo = this.createShoulderCapeFurGeometry(isExtraFluffy);
-      const shoulderCape = new THREE.Mesh(shoulderCapeGeo, coatMaterial);
-      shoulderCape.position.set(0, 0.02, 0.0);
-      shoulderCape.castShadow = true;
-      body.add(shoulderCape);
-
-      // Dorsal spine fur: Gentle long-hair fullness along the backline
-      const dorsalSpineGeo = this.createDorsalSpineFurGeometry(isExtraFluffy);
-      const dorsalSpine = new THREE.Mesh(dorsalSpineGeo, coatMaterial);
-      dorsalSpine.position.set(0, 0.01, 0.0);
-      dorsalSpine.castShadow = true;
-      body.add(dorsalSpine);
-
-      // Flank fur: Layered lateral fur following shoulders -> mid-torso -> hips
-      const lFlankGeo = this.createFlankFurGeometry(true, isExtraFluffy);
-      const lFlank = new THREE.Mesh(lFlankGeo, coatMaterial);
-      lFlank.castShadow = true;
-      body.add(lFlank);
-
-      const rFlankGeo = this.createFlankFurGeometry(false, isExtraFluffy);
-      const rFlank = new THREE.Mesh(rFlankGeo, coatMaterial);
-      rFlank.castShadow = true;
-      body.add(rFlank);
+      // Conforming 3D Torso Mantle (covers withers, spine, flanks, and underbelly drape with long fur volume)
+      const mantleGeo = this.createTorsoMantleGeometry(tier);
+      const mantle = new THREE.Mesh(mantleGeo, coatMaterial);
+      mantle.castShadow = true;
+      body.add(mantle);
     }
 
     body.add(furGroup);
@@ -1535,13 +1258,13 @@ export class CatMeshBuilder {
 
     // Front leg fur feathering (longhair / fluffy only)
     if (isLongOrFluffy) {
-      const lFrontFeatherGeo = this.createLegFeatherGeometry(0.024, 0.075, true);
+      const lFrontFeatherGeo = this.createLegFeatherGeometry(false, true, isExtraFluffy ? 'extra_fluffy' : 'fluffy');
       const lFrontFeather = new THREE.Mesh(lFrontFeatherGeo, coatMaterial);
       lFrontFeather.position.set(0, -0.045, -0.015);
       lFrontFeather.castShadow = true;
       leftFrontLeg.add(lFrontFeather);
 
-      const rFrontFeatherGeo = this.createLegFeatherGeometry(0.024, 0.075, false);
+      const rFrontFeatherGeo = this.createLegFeatherGeometry(false, false, isExtraFluffy ? 'extra_fluffy' : 'fluffy');
       const rFrontFeather = new THREE.Mesh(rFrontFeatherGeo, coatMaterial);
       rFrontFeather.position.set(0, -0.045, -0.015);
       rFrontFeather.castShadow = true;
@@ -1591,13 +1314,13 @@ export class CatMeshBuilder {
 
     // Hind leg breeches / pantaloons (longhair / fluffy only)
     if (isLongOrFluffy) {
-      const lBackFeatherGeo = this.createLegFeatherGeometry(0.034, 0.095, true);
+      const lBackFeatherGeo = this.createLegFeatherGeometry(true, true, isExtraFluffy ? 'extra_fluffy' : 'fluffy');
       const lBackFeather = new THREE.Mesh(lBackFeatherGeo, coatMaterial);
       lBackFeather.position.set(0, -0.045, -0.022);
       lBackFeather.castShadow = true;
       leftBackLeg.add(lBackFeather);
 
-      const rBackFeatherGeo = this.createLegFeatherGeometry(0.034, 0.095, false);
+      const rBackFeatherGeo = this.createLegFeatherGeometry(true, false, isExtraFluffy ? 'extra_fluffy' : 'fluffy');
       const rBackFeather = new THREE.Mesh(rBackFeatherGeo, coatMaterial);
       rBackFeather.position.set(0, -0.045, -0.022);
       rBackFeather.castShadow = true;
@@ -1610,41 +1333,69 @@ export class CatMeshBuilder {
     const tailJoints: THREE.Group[] = [];
     const tailType: TailType = appearance.tailType || 'sleek';
 
+    const isBushyTail = tailType === 'bushy_plume' || tailType === 'plume' || tailType === 'bushy' || isLongOrFluffy;
+    const isMediumTail = isMedium && !isBushyTail;
+    const tailTier: 'medium' | 'fluffy' | 'extra_fluffy' = isExtraFluffy ? 'extra_fluffy' : isBushyTail ? 'fluffy' : 'medium';
+
     const t0 = new THREE.Group();
     t0.name = 'TailJoint0';
     t0.position.set(0, 0.07, -0.19);
     body.add(t0);
-    const m0 = new THREE.Mesh(geos.tail0, coatMaterial);
-    m0.castShadow = true;
-    t0.add(m0);
     tailJoints.push(t0);
 
     const t1 = new THREE.Group();
     t1.name = 'TailJoint1';
     t1.position.set(0, 0, -0.07);
     t0.add(t1);
-    const m1 = new THREE.Mesh(geos.tail1, coatMaterial);
-    m1.castShadow = true;
-    t1.add(m1);
     tailJoints.push(t1);
 
     const t2 = new THREE.Group();
     t2.name = 'TailJoint2';
     t2.position.set(0, 0, -0.07);
     t1.add(t2);
-    const m2 = new THREE.Mesh(geos.tail2, coatMaterial);
-    m2.castShadow = true;
-    t2.add(m2);
     tailJoints.push(t2);
 
     const t3 = new THREE.Group();
     t3.name = 'TailJoint3';
     t3.position.set(0, 0, -0.07);
     t2.add(t3);
-    const m3 = new THREE.Mesh(geos.tail3, coatMaterial);
-    m3.castShadow = true;
-    t3.add(m3);
     tailJoints.push(t3);
+
+    if (isBushyTail || isMediumTail) {
+      // Continuous overlapping 10-sided volumetric fur sleeves attached to each tail joint
+      const f0 = new THREE.Mesh(this.createTailFurGeometry(0, tailTier), coatMaterial);
+      f0.castShadow = true;
+      t0.add(f0);
+
+      const f1 = new THREE.Mesh(this.createTailFurGeometry(1, tailTier), coatMaterial);
+      f1.castShadow = true;
+      t1.add(f1);
+
+      const f2 = new THREE.Mesh(this.createTailFurGeometry(2, tailTier), coatMaterial);
+      f2.castShadow = true;
+      t2.add(f2);
+
+      const f3 = new THREE.Mesh(this.createTailFurGeometry(3, tailTier), coatMaterial);
+      f3.castShadow = true;
+      t3.add(f3);
+    } else {
+      // Short / Sleek base meshes
+      const m0 = new THREE.Mesh(geos.tail0, coatMaterial);
+      m0.castShadow = true;
+      t0.add(m0);
+
+      const m1 = new THREE.Mesh(geos.tail1, coatMaterial);
+      m1.castShadow = true;
+      t1.add(m1);
+
+      const m2 = new THREE.Mesh(geos.tail2, coatMaterial);
+      m2.castShadow = true;
+      t2.add(m2);
+
+      const m3 = new THREE.Mesh(geos.tail3, coatMaterial);
+      m3.castShadow = true;
+      t3.add(m3);
+    }
 
     // Tail Style Adjustments
     if (tailType === 'bobtail' || tailType === 'stumpy') {
@@ -1654,38 +1405,6 @@ export class CatMeshBuilder {
     } else if (tailType === 'crooked') {
       t2.rotation.y = 0.55;
       t2.rotation.x = -0.3;
-    } else if (isMedium && tailType !== 'bushy_plume' && tailType !== 'plume' && tailType !== 'bushy') {
-      // Medium-fluffy: Subtle, natural tail fullness while retaining a clean tapered silhouette
-      t0.scale.set(1.08, 1.08, 1.0);
-      t1.scale.set(1.12, 1.12, 1.0);
-      t2.scale.set(1.14, 1.14, 1.0);
-      t3.scale.set(1.08, 1.08, 1.0);
-    } else if (tailType === 'bushy_plume' || tailType === 'plume' || tailType === 'bushy' || isLongOrFluffy) {
-      // Bushy plume tail: Volumetric joint expansion + contoured flowing plume meshes attached along joints
-      t0.scale.set(1.14, 1.14, 1.0);
-      t1.scale.set(1.24, 1.24, 1.0);
-      t2.scale.set(1.28, 1.28, 1.0);
-      t3.scale.set(1.18, 1.18, 1.0);
-
-      const p0Geo = this.createTailPlumeGeometry(0, isExtraFluffy);
-      const p0 = new THREE.Mesh(p0Geo, coatMaterial);
-      p0.castShadow = true;
-      t0.add(p0);
-
-      const p1Geo = this.createTailPlumeGeometry(1, isExtraFluffy);
-      const p1 = new THREE.Mesh(p1Geo, coatMaterial);
-      p1.castShadow = true;
-      t1.add(p1);
-
-      const p2Geo = this.createTailPlumeGeometry(2, isExtraFluffy);
-      const p2 = new THREE.Mesh(p2Geo, coatMaterial);
-      p2.castShadow = true;
-      t2.add(p2);
-
-      const p3Geo = this.createTailPlumeGeometry(3, isExtraFluffy);
-      const p3 = new THREE.Mesh(p3Geo, coatMaterial);
-      p3.castShadow = true;
-      t3.add(p3);
     }
 
     // ==========================================
@@ -1698,8 +1417,9 @@ export class CatMeshBuilder {
       const slashGeo = new THREE.PlaneGeometry(0.006, 0.042);
       slashGeo.rotateZ(0.28);
       const slash = new THREE.Mesh(slashGeo, scarMat);
-      slash.position.set(0.034, 0.014, 0.032);
-      slash.rotation.y = 0.28;
+      slash.position.set(0.028, 0.050, 0.042);
+      slash.rotation.y = 0.40;
+      slash.rotation.x = -0.14;
       headGroup.add(slash);
     } else if (scarType === 'shoulder_scar' || scarType === 'shoulder_claw_marks') {
       for (let i = 0; i < 3; i++) {
@@ -1721,7 +1441,7 @@ export class CatMeshBuilder {
     } else if (scarType === 'muzzle_nick' || scarType === 'muzzle_scratch') {
       const nGeo = new THREE.PlaneGeometry(0.01, 0.01);
       const nMesh = new THREE.Mesh(nGeo, scarMat);
-      nMesh.position.set(0.022, -0.008, 0.048);
+      nMesh.position.set(0.020, 0.018, 0.055);
       headGroup.add(nMesh);
     } else if (scarType === 'torn_ear' || scarType === 'torn_left_ear' || scarType === 'torn_right_ear') {
       const earTarget = scarType === 'torn_right_ear' ? rightEarGroup : leftEarGroup;
